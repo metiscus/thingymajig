@@ -11,7 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProjects: () => ipcRenderer.invoke('get-projects'),
   saveProject: (projectData) => ipcRenderer.invoke('save-project', projectData),
   deleteProject: (projectId) => ipcRenderer.invoke('delete-project', projectId),
-  exportProjectToExcel: (projectId) => ipcRenderer.invoke('export-project-to-excel', projectId), // New export handler
+  exportProjectToExcel: (projectId) => ipcRenderer.invoke('export-project-to-excel', projectId),
 
   // Tasks
   getTasksForProject: (projectId) => ipcRenderer.invoke('get-tasks-for-project', projectId),
@@ -24,6 +24,10 @@ contextBridge.exposeInMainWorld('electronAPI', {
   saveMaterialItem: (itemData) => ipcRenderer.invoke('save-material-item', itemData),
   deleteMaterialItem: (itemId) => ipcRenderer.invoke('delete-material-item', itemId),
 
+  // Global Materials (NEW)
+  getGlobalMaterials: () => ipcRenderer.invoke('get-global-materials'),
+  saveGlobalMaterial: (materialData) => ipcRenderer.invoke('save-global-material', materialData),
+  deleteGlobalMaterial: (materialId) => ipcRenderer.invoke('delete-global-material', materialId),
 });
 
 console.log('Preload script loaded with electronAPI.');

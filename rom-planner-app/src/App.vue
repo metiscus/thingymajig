@@ -1,304 +1,317 @@
 <template>
   <div id="app-container">
-    <header class="app-header">
-      <h1>Rough Order of Magnitude (ROM) Planner</h1>
-      <nav class="main-navigation">
-        <button 
-          @click="setActiveView('projectWorkflow')" 
-          :class="{ active: activeView === 'projectWorkflow' }">
-          <i class="fas fa-tasks"></i> Projects & Tasks
-        </button>
-        <button 
-          @click="setActiveView('ratesManagement')" 
-          :class="{ active: activeView === 'ratesManagement' }">
-          <i class="fas fa-dollar-sign"></i> Manage Rates
-        </button>
-      </nav>
-    </header>
+    <aside class="sidebar">
+      <div class="logo-container">
+        <img src="../src/assets/vue.svg" alt="Vue Logo" class="logo vue-logo" />
+        <img src="../public/vite.svg" alt="Vite Logo" class="logo vite-logo" />
+        <h1 class="app-title">ROM Planner</h1>
+      </div>
 
-    <div class="main-layout">
-      <aside class="sidebar" v-if="activeView === 'projectWorkflow'">
-        <div class="sidebar-section">
-          <ProjectManager />
-        </div>
-      </aside>
-      
-      <main class="content-area">
-        <template v-if="activeView === 'projectWorkflow'">
-          <!-- ProjectDetailsEditor will show if a project is selected OR if adding a new one -->
-          <ProjectDetailsEditor v-if="projectsStore.currentProject || projectsStore.isEditingNewProject" />
+      <ProjectManager class="sidebar-section" />
 
-          <div v-if="!projectsStore.currentProject && !projectsStore.isEditingNewProject" class="placeholder-content">
-            <h2>Project Dashboard</h2>
-            <p>Select a project from the list on the left, or create a new one to get started.</p>
-          </div>
-          
-          <!-- Show summary, tasks, materials only if a project is truly selected (not in new mode without save) -->
-          <div v-if="projectsStore.currentProject && projectsStore.currentProject.id">
-            <ProjectSummary />
-            <TaskManager />
-            <MaterialManager />
-          </div>
-        </template>
-        
-        <template v-else-if="activeView === 'ratesManagement'">
-          <RatesManager />
-        </template>
-      </main>
-    </div>
+      <div class="settings-section sidebar-section">
+        <h3>Settings</h3>
+        <ul class="settings-nav">
+          <li :class="{ active: activeSettingView === 'rates' }" @click="activeSettingView = 'rates'">
+            <i class="fas fa-dollar-sign"></i> Manage Rates
+          </li>
+          <li :class="{ active: activeSettingView === 'materials' }" @click="activeSettingView = 'materials'">
+            <i class="fas fa-boxes"></i> Manage Global Materials
+          </li>
+        </ul>
+      </div>
+
+      <div class="footer-note">
+        <p>Built with Vue, Electron & SQLite</p>
+      </div>
+    </aside>
+
+    <main class="main-content">
+      <div v-if="activeView === 'projects'">
+        <ProjectDetailsEditor />
+        <ProjectSummary />
+        <TaskManager />
+        <MaterialManager />
+      </div>
+      <div v-else-if="activeView === 'settings'">
+        <RatesManager v-if="activeSettingView === 'rates'" />
+        <GlobalMaterialManager v-if="activeSettingView === 'materials'" />
+      </div>
+      <div v-else class="welcome-message component-section">
+        <h2>Welcome!</h2>
+        <p>Select a project from the left sidebar to begin, or create a new one.</p>
+        <p>Use the "Settings" section to define your labor rates and global material prices.</p>
+      </div>
+    </main>
   </div>
 </template>
 
 <script setup>
-import { ref } from 'vue';
-import { useProjectsStore } from './stores/projectsStore';
-import RatesManager from './components/RatesManager.vue';
+import { ref, watch } from 'vue';
 import ProjectManager from './components/ProjectManager.vue';
-import ProjectDetailsEditor from './components/ProjectDetailsEditor.vue'; // New
+import ProjectDetailsEditor from './components/ProjectDetailsEditor.vue';
+import ProjectSummary from './components/ProjectSummary.vue';
 import TaskManager from './components/TaskManager.vue';
 import MaterialManager from './components/MaterialManager.vue';
-import ProjectSummary from './components/ProjectSummary.vue';
+import RatesManager from './components/RatesManager.vue';
+import GlobalMaterialManager from './components/GlobalMaterialManager.vue'; // Import the new component
+import { useProjectsStore } from './stores/projectsStore';
 
 const projectsStore = useProjectsStore();
-const activeView = ref('projectWorkflow'); 
 
-const setActiveView = (viewName) => {
-  activeView.value = viewName;
-  if (viewName !== 'projectWorkflow') {
-      // If navigating away from project view, clear new project state if not saved
-      if(projectsStore.isEditingNewProject) {
-          projectsStore.cancelNewProjectEdit();
-      }
+// State to control which main view is active
+const activeView = ref('none'); // 'none', 'projects', 'settings'
+const activeSettingView = ref('rates'); // 'rates', 'materials'
+
+// Watch for currentProject changes to switch to 'projects' view
+watch(() => projectsStore.currentProject, (newProject) => {
+  if (newProject && newProject.id) {
+    activeView.value = 'projects';
+  } else if (projectsStore.isEditingNewProject) {
+    activeView.value = 'projects'; // Stay on projects view for new project form
+  } else {
+    activeView.value = 'none'; // No project selected
   }
-};
+}, { immediate: true });
+
+// Watch for isEditingNewProject to keep 'projects' view active when adding
+watch(() => projectsStore.isEditingNewProject, (isEditing) => {
+  if (isEditing) {
+    activeView.value = 'projects';
+  }
+});
+
+// Watch for changes in activeSettingView to switch to 'settings' view
+watch(activeSettingView, () => {
+    activeView.value = 'settings';
+});
+
+// If no project selected and not in settings view, default to welcome
+watch(activeView, (newView) => {
+  if (newView === 'none' && !projectsStore.currentProject && !projectsStore.isEditingNewProject) {
+    // This watch might be overly complex, simple init and then rely on user clicks
+    // For now, let's keep initial activeView as 'none' and welcome will show if no project selected.
+  }
+}, { immediate: true });
 </script>
 
 <style>
-/* Global styles (from previous response, ensure they are complete) */
+/* Global Styles (unchanged, but included for context if you copy-paste the whole thing) */
+:root {
+  --color-primary: #42b983; /* Vue green */
+  --color-primary-dark: #3aa873;
+  --color-secondary: #f0f0f0;
+  --color-secondary-dark: #e0e0e0;
+  --color-danger: #dc3545;
+  --color-danger-dark: #c82333;
+  --color-background: #f8f8f8;
+  --color-light-grey: #e9ecef;
+  --color-mid-grey: #adb5bd;
+  --color-dark-grey: #495057;
+  --color-text: #2c3e50;
+  --border-radius-base: 4px;
+}
+
 body {
-  font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
   margin: 0;
-  background-color: #f4f7f9;
-  color: #333;
-  font-size: 15px;
+  padding: 0;
+  background-color: var(--color-background);
+  color: var(--color-text);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  font-size: 16px;
 }
 
 #app-container {
   display: flex;
-  flex-direction: column;
   height: 100vh;
-}
-
-.app-header {
-  background-color: #35495E; 
-  color: white;
-  padding: 10px 25px; 
-  box-shadow: 0 2px 4px rgba(0,0,0,0.1);
-  display: flex;
-  flex-direction: column; 
-}
-
-.app-header h1 {
-  margin: 0 0 10px 0; 
-  font-size: 1.4em; 
-}
-
-.main-navigation {
-  display: flex;
-  gap: 5px; 
-}
-
-.main-navigation button {
-  background-color: transparent;
-  color: #bdc3c7; 
-  border: 1px solid transparent; 
-  padding: 8px 15px;
-  border-radius: 4px;
-  cursor: pointer;
-  transition: background-color 0.2s ease, color 0.2s ease;
-  font-size: 0.9em;
-}
-
-.main-navigation button:hover {
-  background-color: rgba(255, 255, 255, 0.1);
-  color: #ecf0f1; 
-}
-
-.main-navigation button.active {
-  background-color: #42b983; 
-  color: white;
-  font-weight: 600;
-}
-.main-navigation button i {
-  margin-right: 6px;
-}
-
-
-.main-layout {
-  display: flex;
-  flex-grow: 1;
-  overflow: hidden; 
+  overflow: hidden; /* Prevent main scrollbar on flex container */
 }
 
 .sidebar {
-  width: 320px; /* Slightly narrower sidebar */
-  min-width: 280px;
-  background-color: #ffffff;
+  width: 300px;
+  background-color: white;
   border-right: 1px solid #e0e0e0;
-  padding: 15px; 
-  overflow-y: auto; 
+  padding: 20px;
+  box-shadow: 2px 0 5px rgba(0,0,0,0.05);
   display: flex;
   flex-direction: column;
-  gap: 15px; 
+  overflow-y: auto; /* Allow sidebar to scroll */
+}
+
+.logo-container {
+  display: flex;
+  align-items: center;
+  margin-bottom: 25px;
+  justify-content: center;
+}
+.logo {
+  height: 36px;
+  margin-right: 10px;
+}
+.app-title {
+  font-size: 1.8em;
+  color: var(--color-dark-grey);
+  margin: 0;
+  line-height: 1;
+  font-weight: 600;
 }
 
 .sidebar-section {
-  border: 1px solid #ddd;
-  border-radius: 5px;
+  margin-bottom: 25px;
+  background-color: #fcfcfc;
+  border: 1px solid #f0f0f0;
+  border-radius: var(--border-radius-base);
   padding: 15px;
-  background-color: #fdfdfd;
 }
-.sidebar-section > h3 { /* Target direct h3 */
+.sidebar-section h3 {
   margin-top: 0;
-  color: #42b983; 
-  font-size: 1.1em; /* Adjusted size */
-  padding-bottom: 8px;
-  border-bottom: 1px solid #eee;
-  margin-bottom: 12px;
-}
-
-
-.content-area {
-  flex-grow: 1;
-  padding: 20px;
-  overflow-y: auto; 
-  display: flex;
-  flex-direction: column;
-  gap: 20px;
-}
-.content-area > .rates-manager {
-  flex-grow: 1; 
-}
-
-
-.placeholder-content {
-  text-align: center;
-  margin-top: 50px;
-  color: #777;
-}
-.placeholder-content h2 {
-  color: #35495E;
-  font-size: 1.6em;
-}
-
-.component-section {
-  background-color: #fff;
-  padding: 20px;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.05);
-  margin-bottom: 0; 
-}
-.component-section > h3, .component-section > h2 { 
-  margin-top: 0;
+  color: var(--color-dark-grey);
+  font-size: 1.1em;
   border-bottom: 1px solid #eee;
   padding-bottom: 10px;
   margin-bottom: 15px;
-  color: #35495E;
-  font-size: 1.25em;
 }
 
+.settings-nav {
+  list-style: none;
+  padding: 0;
+}
+.settings-nav li {
+  padding: 8px 10px;
+  cursor: pointer;
+  border-radius: var(--border-radius-base);
+  transition: background-color 0.2s ease;
+  color: var(--color-dark-grey);
+  font-size: 0.95em;
+  display: flex;
+  align-items: center;
+}
+.settings-nav li i {
+  margin-right: 8px;
+  width: 20px; /* fixed width for icon alignment */
+  text-align: center;
+}
+.settings-nav li:hover {
+  background-color: var(--color-light-grey);
+}
+.settings-nav li.active {
+  background-color: var(--color-primary);
+  color: white;
+  font-weight: 500;
+}
+.settings-nav li.active i {
+    color: white; /* Ensure icon color matches text */
+}
+
+.main-content {
+  flex-grow: 1;
+  padding: 20px;
+  overflow-y: auto; /* Allow main content to scroll */
+}
+
+.component-section {
+  background-color: white;
+  border: 1px solid #e0e0e0;
+  border-radius: var(--border-radius-base);
+  padding: 20px;
+  margin-bottom: 20px;
+}
+.component-section h3 {
+  margin-top: 0;
+  color: var(--color-dark-grey);
+  font-size: 1.2em;
+  border-bottom: 1px solid #eee;
+  padding-bottom: 10px;
+  margin-bottom: 20px;
+}
+
+/* General Button Styles */
+button {
+  background-color: var(--color-primary);
+  color: white;
+  border: none;
+  border-radius: var(--border-radius-base);
+  padding: 10px 20px;
+  cursor: pointer;
+  font-size: 1em;
+  transition: background-color 0.2s ease, opacity 0.2s ease;
+}
+button:hover {
+  background-color: var(--color-primary-dark);
+}
+button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
+button.secondary {
+  background-color: var(--color-secondary);
+  color: var(--color-dark-grey);
+  border: 1px solid var(--color-mid-grey);
+}
+button.secondary:hover {
+  background-color: var(--color-secondary-dark);
+}
+button.danger {
+  background-color: var(--color-danger);
+  color: white;
+}
+button.danger:hover {
+  background-color: var(--color-danger-dark);
+}
+
+/* Table styles */
 table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 15px;
+  font-size: 0.9em;
 }
 th, td {
   border: 1px solid #e0e0e0;
-  padding: 10px 12px; 
+  padding: 10px 8px;
   text-align: left;
-  vertical-align: middle;
-  font-size: 0.95em; 
 }
 th {
-  background-color: #f8f9fa;
+  background-color: #f2f2f2;
   font-weight: 600;
-  color: #495057;
+  color: var(--color-dark-grey);
 }
 tr:nth-child(even) {
   background-color: #fdfdfd;
 }
 tr:hover {
-    background-color: #f1f1f1;
+  background-color: #f5f5f5;
 }
 
-button {
-  padding: 8px 12px;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 0.9em;
-  transition: background-color 0.2s ease;
+.loading-message, .error-message, .welcome-message {
+  padding: 15px;
+  border-radius: var(--border-radius-base);
+  margin-bottom: 15px;
 }
-button.primary { background-color: #42b983; color: white; }
-button.primary:hover { background-color: #3aa873; }
-button.secondary { background-color: #6c757d; color: white; }
-button.secondary:hover { background-color: #5a6268; }
-button.danger { background-color: #dc3545; color: white; }
-button.danger:hover { background-color: #c82333; }
-button:disabled {
-  background-color: #e9ecef;
-  color: #6c757d;
-  cursor: not-allowed;
+.loading-message {
+  background-color: #eef7ff;
+  color: #2a6496;
+  border: 1px solid #a8d5ff;
 }
-button + button {
-  margin-left: 8px;
+.error-message {
+  background-color: #f8d7da;
+  color: #721c24;
+  border: 1px solid #f5c6cb;
+}
+.welcome-message {
+  background-color: #f0fff4; /* Light green */
+  color: #28a745; /* Green */
+  border: 1px solid #d4edda; /* Light green border */
 }
 
-input[type="text"], input[type="number"], input[type="date"], select, textarea { /* Added textarea */
-  padding: 8px;
-  border: 1px solid #ced4da;
-  border-radius: 4px;
-  box-sizing: border-box;
-  width: 100%; 
-  font-size: 0.95em;
-}
-textarea {
-  min-height: 60px;
-  resize: vertical;
-}
-
-
-input[type="number"]::-webkit-outer-spin-button,
-input[type="number"]::-webkit-inner-spin-button {
-  -webkit-appearance: none;
-  margin: 0;
-}
-input[type="number"] {
-  -moz-appearance: textfield; 
-}
-
-
-form div { margin-bottom: 10px; }
-form label { display: block; margin-bottom: 5px; font-weight: 500; }
-
-.error-message { color: #dc3545; background-color: #f8d7da; border:1px solid #f5c6cb; padding: 10px; border-radius: 4px; margin-bottom: 10px; }
-.loading-message { color: #007bff; margin: 10px 0; }
-
-.editable-table td input[type="text"],
-.editable-table td input[type="number"],
-.editable-table td select {
-  padding: 6px 8px; margin: -6px -8px; 
-  border: 1px solid #3498db; font-size: inherit; 
-  height: calc(100% + 12px); 
-  width: calc(100% + 16px); 
-  box-sizing: border-box;
-  border-radius: 0; 
-}
-.editable-table .editing-row { background-color: #e6f7ff !important; }
-.editable-table .actions-cell { white-space: nowrap; text-align: right; }
-.editable-table .actions-cell button { margin-left: 4px; }
-
-.fas {
-  margin-right: 5px;
+.footer-note {
+  margin-top: auto; /* Pushes the footer to the bottom of the sidebar */
+  text-align: center;
+  font-size: 0.8em;
+  color: #a0a0a0;
+  padding-top: 20px;
+  border-top: 1px solid #eee;
 }
 </style>

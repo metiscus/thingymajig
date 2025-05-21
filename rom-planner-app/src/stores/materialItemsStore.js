@@ -4,6 +4,7 @@ import { ref, computed } from 'vue';
 
 export const useMaterialItemsStore = defineStore('materialItems', () => {
   const materialItemsList = ref([]); // For the currently selected project
+  const globalMaterialList = ref([]); // New: For globally stored materials
   const isLoading = ref(false);
   const error = ref(null);
 
@@ -26,6 +27,22 @@ export const useMaterialItemsStore = defineStore('materialItems', () => {
     }
   }
 
+  // New: Fetch global materials
+  async function fetchGlobalMaterials() {
+    if (!window.electronAPI) {
+      console.warn('Electron API not available. Cannot fetch global materials.');
+      globalMaterialList.value = [];
+      return;
+    }
+    try {
+      const items = await window.electronAPI.getGlobalMaterials();
+      globalMaterialList.value = items;
+    } catch (e) {
+      console.error('Failed to fetch global materials:', e);
+      globalMaterialList.value = [];
+    }
+  }
+
   async function saveMaterialItem(itemData) { // { id?, projectId, lineItem, vendor, category, unitPrice, quantity, comment }
     if (!window.electronAPI) {
       error.value = 'Electron API not available.';
@@ -36,7 +53,6 @@ export const useMaterialItemsStore = defineStore('materialItems', () => {
     try {
       const savedItem = await window.electronAPI.saveMaterialItem(itemData);
       if (savedItem && itemData.projectId) {
-        // Refetch or update list locally
         await fetchMaterialItemsForProject(itemData.projectId);
       }
       return savedItem;
@@ -71,6 +87,34 @@ export const useMaterialItemsStore = defineStore('materialItems', () => {
     }
   }
 
+  // New: Save global material (e.g., from a separate management view)
+  async function saveGlobalMaterial(materialData) {
+    if (!window.electronAPI) return null;
+    try {
+      const saved = await window.electronAPI.saveGlobalMaterial(materialData);
+      await fetchGlobalMaterials(); // Refresh global list after save
+      return saved;
+    } catch (e) {
+      console.error('Failed to save global material:', e);
+      return null;
+    }
+  }
+
+  // New: Delete global material
+  async function deleteGlobalMaterial(materialId) {
+    if (!window.electronAPI) return false;
+    try {
+      const result = await window.electronAPI.deleteGlobalMaterial(materialId);
+      if (result.success) {
+        await fetchGlobalMaterials(); // Refresh global list
+      }
+      return result.success;
+    } catch (e) {
+      console.error('Failed to delete global material:', e);
+      return false;
+    }
+  }
+
   const totalDetailedMaterialCost = computed(() => {
     return materialItemsList.value.reduce((total, item) => {
       return total + (Number(item.unitPrice || 0) * Number(item.quantity || 0));
@@ -79,11 +123,15 @@ export const useMaterialItemsStore = defineStore('materialItems', () => {
 
   return {
     materialItemsList,
+    globalMaterialList,
     isLoading,
     error,
     fetchMaterialItemsForProject,
+    fetchGlobalMaterials,
     saveMaterialItem,
     deleteMaterialItem,
+    saveGlobalMaterial,
+    deleteGlobalMaterial,
     totalDetailedMaterialCost,
   };
 });

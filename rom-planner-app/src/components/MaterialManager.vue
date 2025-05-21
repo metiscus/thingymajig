@@ -32,7 +32,20 @@
           <!-- Existing Items -->
           <tr v-for="item in materialItemsStore.materialItemsList" :key="item.id" :class="{ 'editing-row': editingItemId === item.id }">
             <template v-if="editingItemId === item.id">
-              <td><input type="text" v-model="editableItemData.lineItem" required ref="firstEditableInput" /></td>
+              <td>
+                <input 
+                  type="text" 
+                  v-model="editableItemData.lineItem" 
+                  required 
+                  ref="firstEditableInput" 
+                  list="globalMaterialsList" 
+                  @input="handleLineItemInput"
+                  @change="handleLineItemChange"
+                />
+                <datalist id="globalMaterialsList">
+                  <option v-for="g_mat in filteredGlobalMaterials" :key="g_mat.id" :value="g_mat.name"></option>
+                </datalist>
+              </td>
               <td><input type="text" v-model="editableItemData.vendor" /></td>
               <td>
                 <select v-model="editableItemData.category">
@@ -65,7 +78,21 @@
 
           <!-- New Item Row (when adding) -->
           <tr v-if="editingItemId === 'new'" class="editing-row new-item-row">
-            <td><input type="text" v-model="editableItemData.lineItem" placeholder="Line Item Name" required ref="firstEditableInput" /></td>
+            <td>
+              <input 
+                type="text" 
+                v-model="editableItemData.lineItem" 
+                placeholder="Line Item Name" 
+                required 
+                ref="firstEditableInput" 
+                list="globalMaterialsList" 
+                @input="handleLineItemInput"
+                @change="handleLineItemChange"
+              />
+              <datalist id="globalMaterialsList">
+                  <option v-for="g_mat in filteredGlobalMaterials" :key="g_mat.id" :value="g_mat.name"></option>
+              </datalist>
+            </td>
             <td><input type="text" v-model="editableItemData.vendor" placeholder="Vendor" /></td>
             <td>
               <select v-model="editableItemData.category">
@@ -98,7 +125,7 @@
 </template>
 
 <script setup>
-import { ref, watch, nextTick, toRaw } from 'vue';
+import { ref, watch, nextTick, toRaw, computed, onMounted } from 'vue';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useMaterialItemsStore } from '../stores/materialItemsStore';
 
@@ -115,6 +142,54 @@ const materialCategories = ref([
   { value: 'Shipping', label: 'Shipping' },
   { value: 'Misc', label: 'Miscellaneous' }
 ]);
+
+// New: Fetch global materials on component mount
+onMounted(() => {
+  materialItemsStore.fetchGlobalMaterials();
+});
+
+// New: Filter global materials for datalist suggestions
+const filteredGlobalMaterials = computed(() => {
+  if (!editableItemData.value || !editableItemData.value.lineItem) {
+    return materialItemsStore.globalMaterialList;
+  }
+  const searchTerm = editableItemData.value.lineItem.toLowerCase();
+  return materialItemsStore.globalMaterialList.filter(g_mat =>
+    g_mat.name.toLowerCase().includes(searchTerm)
+  );
+});
+
+// New: Handler for when user types into the lineItem input (useful for pre-filling if a global material is selected via dropdown)
+const handleLineItemInput = (event) => {
+  const selectedName = event.target.value;
+  const matchedGlobalMaterial = materialItemsStore.globalMaterialList.find(
+    (g_mat) => g_mat.name === selectedName
+  );
+
+  if (matchedGlobalMaterial) {
+    // If an exact match from global list is found, pre-fill price and category
+    editableItemData.value.unitPrice = matchedGlobalMaterial.unitPrice;
+    if (materialCategories.value.find(cat => cat.value === matchedGlobalMaterial.category)) {
+      editableItemData.value.category = matchedGlobalMaterial.category;
+    } else {
+      editableItemData.value.category = 'Misc'; // Fallback for unknown category
+    }
+  } else {
+    // If text doesn't match a global material, clear price/category to indicate manual entry
+    // Only clear if the user is typing a new item, not if they are editing an existing one
+    if (editingItemId.value === 'new') {
+        editableItemData.value.unitPrice = 0;
+        editableItemData.value.category = 'Hardware'; // Reset to default
+    }
+  }
+};
+
+// New: Handler for when the input value changes (e.g., after selecting from datalist)
+const handleLineItemChange = (event) => {
+    // This is essentially the same as handleLineItemInput for handling selection
+    handleLineItemInput(event);
+};
+
 
 const cancelEdit = () => {
   editingItemId.value = null;
@@ -135,9 +210,12 @@ const defaultItem = () => ({
 const focusFirstInput = async () => {
   await nextTick();
   if (firstEditableInput.value) {
-    firstEditableInput.value.focus();
-    if (typeof firstEditableInput.value.select === 'function') {
-      firstEditableInput.value.select();
+    const elementToFocus = Array.isArray(firstEditableInput.value) ? firstEditableInput.value[0] : firstEditableInput.value;
+    if (elementToFocus) {
+        elementToFocus.focus();
+        if (typeof elementToFocus.select === 'function') {
+            elementToFocus.select();
+        }
     }
   }
 };
@@ -237,7 +315,6 @@ watch(() => projectsStore.currentProject, (newProject) => {
 
 /* Ensure select takes up space like other inputs in editable table */
 .editable-table td select {
-  /* Styles are inherited from global .editable-table td input, but if you need specific ones: */
   /* width: 100%; */
   /* box-sizing: border-box; */
   /* padding: 6px 8px; */

@@ -1,8 +1,9 @@
+// main.cjs
 const { app, BrowserWindow, ipcMain, dialog } = require('electron');
 const path = require('path');
 const sqlite3 = require('sqlite3').verbose();
-const ExcelJS = require('exceljs'); // Import exceljs
-const fs = require('fs'); // Import fs for file operations
+const ExcelJS = require('exceljs');
+const fs = require('fs');
 
 const dbPath = app.isPackaged
   ? path.join(app.getPath('userData'), 'rom_planner.db')
@@ -31,14 +32,13 @@ const db = new sqlite3.Database(dbPath, (err) => {
           id INTEGER PRIMARY KEY AUTOINCREMENT,
           name TEXT UNIQUE NOT NULL,
           description TEXT,
-          riskPercentage REAL DEFAULT 0, -- New field
+          riskPercentage REAL DEFAULT 0,
           createdAt DATETIME DEFAULT CURRENT_TIMESTAMP
         )
       `, (err) => {
         if (err) console.error("Error creating/altering 'projects' table", err);
         else {
           console.log("'projects' table checked/created.");
-          // Simple migration: Add column if it doesn't exist for older DBs
           db.get("PRAGMA table_info(projects)", (err, rows) => {
             if (err) return console.error("Error getting projects table info", err);
             const columns = Array.isArray(rows) ? rows.map(col => col.name) : Object.keys(rows || {});
@@ -86,6 +86,19 @@ const db = new sqlite3.Database(dbPath, (err) => {
       `, (err) => {
         if (err) console.error("Error creating 'material_items' table", err);
         else console.log("'material_items' table checked/created.");
+      });
+      
+      // New table for global materials
+      db.run(`
+        CREATE TABLE IF NOT EXISTS global_materials (
+          id INTEGER PRIMARY KEY AUTOINCREMENT,
+          name TEXT UNIQUE NOT NULL,
+          category TEXT,
+          unitPrice REAL NOT NULL
+        )
+      `, (err) => {
+        if (err) console.error("Error creating 'global_materials' table", err);
+        else console.log("'global_materials' table checked/created.");
       });
     });
   }
@@ -172,10 +185,9 @@ ipcMain.handle('delete-rate', async (event, rateId) => {
   });
 });
 
-// --- IPC Handlers for Projects (Updated) ---
+// --- IPC Handlers for Projects (Unchanged) ---
 ipcMain.handle('get-projects', async () => {
   return new Promise((resolve, reject) => {
-    // Ensure riskPercentage is selected
     db.all("SELECT id, name, description, riskPercentage, createdAt FROM projects ORDER BY name", [], (err, rows) => {
       if (err) reject(err); else resolve(rows);
     });
@@ -183,17 +195,16 @@ ipcMain.handle('get-projects', async () => {
 });
 
 ipcMain.handle('save-project', async (event, projectData) => { 
-  // projectData = { id?, name, description, riskPercentage }
   const { id, name, description, riskPercentage } = projectData;
-  const risk = parseFloat(riskPercentage) || 0; // Ensure it's a number
+  const risk = parseFloat(riskPercentage) || 0;
 
   return new Promise((resolve, reject) => {
-    if (id) { // Update existing
+    if (id) {
       const sql = "UPDATE projects SET name = ?, description = ?, riskPercentage = ? WHERE id = ? RETURNING *";
       db.get(sql, [name, description, risk, id], (err, row) => {
         if (err) reject(err); else resolve(row);
       });
-    } else { // Insert new
+    } else {
       const sql = "INSERT INTO projects (name, description, riskPercentage) VALUES (?, ?, ?) RETURNING *";
       db.get(sql, [name, description, risk], (err, row) => {
         if (err) reject(err); else resolve(row);
@@ -229,14 +240,14 @@ ipcMain.handle('get-tasks-for-project', async (event, projectId) => {
 ipcMain.handle('save-task', async (event, taskData) => {
   return new Promise((resolve, reject) => {
     const effortsJSON = JSON.stringify(taskData.efforts || {});
-    if (taskData.id) { // Update
+    if (taskData.id) {
       const sql = `UPDATE tasks SET name = ?, description = ?, efforts = ?, travelCost = ?, materialsCost = ?, sequence = ?
                    WHERE id = ? AND projectId = ? RETURNING *`;
       db.get(sql, [taskData.name, taskData.description, effortsJSON, taskData.travelCost, taskData.materialsCost, taskData.sequence, taskData.id, taskData.projectId], (err, row) => {
         if (err) reject(err);
         else resolve({ ...row, efforts: JSON.parse(row.efforts || '{}') });
       });
-    } else { // Insert
+    } else {
       const sql = `INSERT INTO tasks (projectId, name, description, efforts, travelCost, materialsCost, sequence)
                    VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`;
       db.get(sql, [taskData.projectId, taskData.name, taskData.description, effortsJSON, taskData.travelCost, taskData.materialsCost, taskData.sequence], (err, row) => {
@@ -281,7 +292,7 @@ ipcMain.handle('update-task-sequence', async (event, tasksToUpdate) => {
   });
 });
 
-// --- IPC Handlers for Material Items (Unchanged) ---
+// --- IPC Handlers for Material Items (Unchanged for saving/fetching project-specific items) ---
 ipcMain.handle('get-material-items-for-project', async (event, projectId) => {
   return new Promise((resolve, reject) => {
     db.all("SELECT * FROM material_items WHERE projectId = ? ORDER BY createdAt", [projectId], (err, rows) => {
@@ -297,7 +308,7 @@ ipcMain.handle('get-material-items-for-project', async (event, projectId) => {
 ipcMain.handle('save-material-item', async (event, itemData) => {
   return new Promise((resolve, reject) => {
     const { id, projectId, lineItem, vendor, category, unitPrice, quantity, comment } = itemData;
-    if (id) { // Update
+    if (id) {
       const sql = `UPDATE material_items 
                    SET lineItem = ?, vendor = ?, category = ?, unitPrice = ?, quantity = ?, comment = ?
                    WHERE id = ? AND projectId = ? RETURNING *`;
@@ -307,7 +318,7 @@ ipcMain.handle('save-material-item', async (event, itemData) => {
           reject(err);
         } else resolve(row);
       });
-    } else { // Insert
+    } else {
       const sql = `INSERT INTO material_items (projectId, lineItem, vendor, category, unitPrice, quantity, comment)
                    VALUES (?, ?, ?, ?, ?, ?, ?) RETURNING *`;
       db.get(sql, [projectId, lineItem, vendor, category, parseFloat(unitPrice), parseInt(quantity), comment], (err, row) => {
@@ -332,7 +343,62 @@ ipcMain.handle('delete-material-item', async (event, itemId) => {
   });
 });
 
-// --- New IPC Handler for Exporting Project Data ---
+// --- IPC Handlers for Global Materials (NEW) ---
+ipcMain.handle('get-global-materials', async () => {
+  return new Promise((resolve, reject) => {
+    db.all("SELECT id, name, category, unitPrice FROM global_materials ORDER BY name", [], (err, rows) => {
+      if (err) {
+        console.error('Error fetching global materials:', err);
+        reject(err);
+      } else {
+        resolve(rows);
+      }
+    });
+  });
+});
+
+ipcMain.handle('save-global-material', async (event, materialData) => {
+  const { id, name, category, unitPrice } = materialData;
+  return new Promise((resolve, reject) => {
+    if (id) {
+      const sql = "UPDATE global_materials SET name = ?, category = ?, unitPrice = ? WHERE id = ? RETURNING *";
+      db.get(sql, [name, category, parseFloat(unitPrice), id], (err, row) => {
+        if (err) {
+          console.error('Error updating global material:', err);
+          reject(err);
+        } else resolve(row);
+      });
+    } else {
+      const sql = `
+        INSERT INTO global_materials (name, category, unitPrice) VALUES (?, ?, ?)
+        ON CONFLICT(name) DO UPDATE SET category=excluded.category, unitPrice=excluded.unitPrice
+        RETURNING *;
+      `;
+      db.get(sql, [name, category, parseFloat(unitPrice)], (err, row) => {
+        if (err) {
+          console.error('Error inserting global material:', err);
+          reject(err);
+        } else resolve(row);
+      });
+    }
+  });
+});
+
+ipcMain.handle('delete-global-material', async (event, globalMaterialId) => {
+  return new Promise((resolve, reject) => {
+    db.run("DELETE FROM global_materials WHERE id = ?", [globalMaterialId], function(err) {
+      if (err) {
+        console.error('Error deleting global material:', err);
+        reject(err);
+      } else {
+        resolve({ success: this.changes > 0, id: globalMaterialId });
+      }
+    });
+  });
+});
+
+
+// --- IPC Handler for Exporting Project Data (Unchanged from previous turn) ---
 ipcMain.handle('export-project-to-excel', async (event, projectId) => {
   const workbook = new ExcelJS.Workbook();
   const options = {
@@ -351,7 +417,6 @@ ipcMain.handle('export-project-to-excel', async (event, projectId) => {
   }
 
   try {
-    // 1. Fetch all necessary data
     const project = await new Promise((resolve, reject) => {
       db.get("SELECT id, name, description, riskPercentage FROM projects WHERE id = ?", [projectId], (err, row) => {
         if (err) reject(err); else resolve(row);
@@ -387,14 +452,12 @@ ipcMain.handle('export-project-to-excel', async (event, projectId) => {
       });
     });
 
-    // Helper to calculate role rate
     const getRoleRate = (role) => {
       const rateObj = rates.find(r => r.role === role);
       if (!rateObj) return 0;
       return rateObj.unit === 'hour' ? Number(rateObj.rate || 0) * 8 : Number(rateObj.rate || 0);
     };
 
-    // Helper to calculate task total cost
     const calculateTaskTotalCost = (task) => {
       let cost = 0;
       for (const role in task.efforts) {
@@ -405,15 +468,12 @@ ipcMain.handle('export-project-to-excel', async (event, projectId) => {
       return cost;
     };
 
-    // Helper to calculate task total days
     const calculateTaskTotalDays = (task) => {
       return Object.values(task.efforts || {}).reduce((sum, effort) => sum + Number(effort || 0), 0);
     };
 
-    // Get all unique roles for headers
     const allRoles = [...new Set(rates.map(r => r.role))].sort();
 
-    // 2. Summary Sheet
     const summarySheet = workbook.addWorksheet('Summary');
     summarySheet.columns = [{ width: 30 }, { width: 40 }];
 
@@ -460,7 +520,6 @@ ipcMain.handle('export-project-to-excel', async (event, projectId) => {
     summarySheet.addRow(['PROJECT GRAND TOTAL (incl. Risk):', grandTotalWithRisk]).font = { bold: true, size: 12 };
     summarySheet.lastRow.getCell(2).numFmt = '$#,##0.00';
 
-    // Apply styles to summary
     summarySheet.eachRow({ includeEmpty: false }, function(row, rowNumber) {
         row.eachCell({ includeEmpty: true }, function(cell, colNumber) {
             cell.alignment = { vertical: 'top', horizontal: 'left' };
@@ -472,26 +531,24 @@ ipcMain.handle('export-project-to-excel', async (event, projectId) => {
              row.fill = {
                 type: 'pattern',
                 pattern: 'solid',
-                fgColor: { argb: 'FF35495E' } // Match Vue dark blue
+                fgColor: { argb: 'FF35495E' }
             };
             row.font = { color: { argb: 'FFFFFFFF' }, bold: true, size: 12 };
         }
     });
 
-
-    // 3. Labor Details Sheet
     const laborSheet = workbook.addWorksheet('Labor Details');
     const laborHeaders = ['Task Name', 'Description', ...allRoles.map(role => `${role} (Days)`), 'Travel Cost', 'Materials Cost', 'Total Task Days', 'Total Task Cost'];
     laborSheet.addRow(laborHeaders).font = { bold: true };
 
     laborSheet.columns = [
-        { width: 30 }, // Task Name
-        { width: 40 }, // Description
-        ...allRoles.map(() => ({ width: 15, alignment: { horizontal: 'center' } })), // Roles
-        { width: 15, style: { numFmt: '$#,##0.00' } }, // Travel Cost
-        { width: 15, style: { numFmt: '$#,##0.00' } }, // Materials Cost
-        { width: 15, alignment: { horizontal: 'center' } }, // Total Task Days
-        { width: 18, style: { numFmt: '$#,##0.00' } }  // Total Task Cost
+        { width: 30 },
+        { width: 40 },
+        ...allRoles.map(() => ({ width: 15, alignment: { horizontal: 'center' } })),
+        { width: 15, style: { numFmt: '$#,##0.00' } },
+        { width: 15, style: { numFmt: '$#,##0.00' } },
+        { width: 15, alignment: { horizontal: 'center' } },
+        { width: 18, style: { numFmt: '$#,##0.00' } }
     ];
 
     tasks.forEach(task => {
@@ -507,24 +564,22 @@ ipcMain.handle('export-project-to-excel', async (event, projectId) => {
       laborSheet.addRow(rowData);
     });
 
-    // Add totals to labor sheet footer
     const laborTotalsRow = [];
     laborTotalsRow[0] = 'Project Totals:';
-    laborTotalsRow[1] = ''; // Description column
+    laborTotalsRow[1] = '';
     let currentColumn = 2;
     for (const role of allRoles) {
       laborTotalsRow[currentColumn++] = totalDaysPerRole[role];
     }
     laborTotalsRow[currentColumn++] = totalTaskTravelCost;
     laborTotalsRow[currentColumn++] = totalTaskIncidentalMaterials;
-    laborTotalsRow[currentColumn++] = tasks.reduce((sum, task) => sum + calculateTaskTotalDays(task), 0); // Grand total days
-    laborTotalsRow[currentColumn++] = totalLaborCost + totalTaskTravelCost + totalTaskIncidentalMaterials; // Grand total cost for tasks only
+    laborTotalsRow[currentColumn++] = tasks.reduce((sum, task) => sum + calculateTaskTotalDays(task), 0);
+    laborTotalsRow[currentColumn++] = totalLaborCost + totalTaskTravelCost + totalTaskIncidentalMaterials;
     
     laborSheet.addRow(laborTotalsRow).font = { bold: true };
-    // Apply currency format to relevant total cells
-    laborSheet.lastRow.getCell(currentColumn - 3).numFmt = '$#,##0.00'; // Travel cost total
-    laborSheet.lastRow.getCell(currentColumn - 2).numFmt = '$#,##0.00'; // Materials cost total
-    laborSheet.lastRow.getCell(currentColumn - 1).numFmt = '$#,##0.00'; // Grand total cost for tasks only
+    laborSheet.lastRow.getCell(currentColumn - 3).numFmt = '$#,##0.00';
+    laborSheet.lastRow.getCell(currentColumn - 2).numFmt = '$#,##0.00';
+    laborSheet.lastRow.getCell(currentColumn - 1).numFmt = '$#,##0.00';
 
     const costPerRoleRow = [];
     costPerRoleRow[0] = 'Cost per Role:';
@@ -534,11 +589,10 @@ ipcMain.handle('export-project-to-excel', async (event, projectId) => {
       costPerRoleRow[currentColumn++] = totalCostPerRole[role];
     }
     laborSheet.addRow(costPerRoleRow);
-    for (let i = 2; i < 2 + allRoles.length; i++) { // Apply currency format to role costs
+    for (let i = 2; i < 2 + allRoles.length; i++) {
         laborSheet.lastRow.getCell(i).numFmt = '$#,##0.00';
     }
 
-    // 4. Rates Sheet
     const ratesSheet = workbook.addWorksheet('Rates');
     ratesSheet.columns = [
       { header: 'Role', key: 'role', width: 25 },
@@ -550,7 +604,6 @@ ipcMain.handle('export-project-to-excel', async (event, projectId) => {
       ratesSheet.addRow([rate.role, rate.rate, rate.unit]);
     });
 
-    // 5. Materials Sheet
     const materialsSheet = workbook.addWorksheet('Materials');
     materialsSheet.columns = [
       { header: 'Line Item', key: 'lineItem', width: 30 },
@@ -578,7 +631,6 @@ ipcMain.handle('export-project-to-excel', async (event, projectId) => {
     materialsSheet.lastRow.getCell(6).numFmt = '$#,##0.00';
 
 
-    // Write to file
     await workbook.xlsx.writeFile(filePath);
 
     return { success: true, filePath: filePath };
