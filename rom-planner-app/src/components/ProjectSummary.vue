@@ -2,8 +2,8 @@
   <div class="project-summary component-section" v-if="projectsStore.currentProject && projectsStore.currentProject.id">
     <h3>Project Cost Summary: {{ projectsStore.currentProject.name }}</h3>
     
-    <div v-if="tasksStore.isLoading || materialItemsStore.isLoading" class="loading-message">
-      Calculating summary...
+    <div v-if="tasksStore.isLoading || materialItemsStore.isLoading || projectsStore.isExporting" class="loading-message">
+      {{ projectsStore.isExporting ? 'Exporting project data...' : 'Calculating summary...' }}
     </div>
     <div v-else class="summary-grid">
       <div class="summary-item">
@@ -38,8 +38,16 @@
         <span class="value">{{ formatCurrency(grandTotalWithRisk) }}</span>
       </div>
     </div>
-     <div v-if="tasksStore.error || materialItemsStore.error" class="error-message">
-      Could not load all data for summary. {{ tasksStore.error }} {{ materialItemsStore.error }}
+    <div class="project-summary-actions">
+        <button 
+            @click="exportProject" 
+            class="secondary" 
+            :disabled="tasksStore.isLoading || materialItemsStore.isLoading || projectsStore.isExporting">
+            <i class="fas fa-file-export"></i> Export to Spreadsheet
+        </button>
+    </div>
+     <div v-if="tasksStore.error || materialItemsStore.error || projectsStore.error" class="error-message">
+      Could not load all data for summary. {{ tasksStore.error }} {{ materialItemsStore.error }} {{ projectsStore.error }}
     </div>
   </div>
 </template>
@@ -49,10 +57,12 @@ import { computed } from 'vue';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useTasksStore } from '../stores/tasksStore';
 import { useMaterialItemsStore } from '../stores/materialItemsStore';
+import { useRatesStore } from '../stores/ratesStore';
 
 const projectsStore = useProjectsStore();
 const tasksStore = useTasksStore();
 const materialItemsStore = useMaterialItemsStore();
+const ratesStore = useRatesStore(); // Needed for rate-based calculations
 
 const totalLaborCost = computed(() => {
   return Object.values(tasksStore.totalCostPerRoleForCurrentProject).reduce((sum, cost) => sum + (Number(cost) || 0), 0);
@@ -76,6 +86,14 @@ const grandTotalWithRisk = computed(() => {
 
 const formatCurrency = (value) => {
   return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(Number(value) || 0);
+};
+
+const exportProject = async () => {
+    if (projectsStore.currentProject && projectsStore.currentProject.id) {
+        await projectsStore.exportProject(projectsStore.currentProject.id);
+    } else {
+        alert("Please select a project to export.");
+    }
 };
 </script>
 
@@ -146,5 +164,9 @@ const formatCurrency = (value) => {
 .summary-item.grand-total .value {
   color: white;
   font-size: 1.4em; /* Adjusted */
+}
+.project-summary-actions {
+    margin-top: 20px;
+    text-align: right;
 }
 </style>

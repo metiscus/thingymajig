@@ -9,6 +9,7 @@ export const useProjectsStore = defineStore('projects', () => {
   const currentProject = ref(null); 
   const isEditingNewProject = ref(false); // Flag for new project mode
   const isLoading = ref(false);
+  const isExporting = ref(false); // New flag for export state
   const error = ref(null);
 
   const tasksStore = useTasksStore();
@@ -104,9 +105,33 @@ export const useProjectsStore = defineStore('projects', () => {
     }
   }
 
+  async function exportProject(projectId) {
+    if (!window.electronAPI) {
+      alert('Export feature not available.');
+      return;
+    }
+    isExporting.value = true;
+    error.value = null;
+    try {
+        const result = await window.electronAPI.exportProjectToExcel(projectId);
+        if (result.success) {
+            alert('Project exported successfully to:\n' + result.filePath);
+        } else {
+            alert('Export failed: ' + (result.error || 'Unknown error.'));
+        }
+    } catch (e) {
+        console.error('Error during project export:', e);
+        error.value = e.message || 'An unexpected error occurred during export.';
+        alert('An error occurred during export: ' + e.message);
+    } finally {
+        isExporting.value = false;
+    }
+  }
+
 
   return { 
-    projectsList, currentProject, isLoading, error, isEditingNewProject,
-    fetchProjects, saveProject, deleteProject, selectProject, startNewProject, cancelNewProjectEdit
+    projectsList, currentProject, isLoading, error, isEditingNewProject, isExporting,
+    fetchProjects, saveProject, deleteProject, selectProject, startNewProject, cancelNewProjectEdit,
+    exportProject
   };
 });

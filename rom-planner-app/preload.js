@@ -11,6 +11,7 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getProjects: () => ipcRenderer.invoke('get-projects'),
   saveProject: (projectData) => ipcRenderer.invoke('save-project', projectData),
   deleteProject: (projectId) => ipcRenderer.invoke('delete-project', projectId),
+  exportProjectToExcel: (projectId) => ipcRenderer.invoke('export-project-to-excel', projectId), // New export handler
 
   // Tasks
   getTasksForProject: (projectId) => ipcRenderer.invoke('get-tasks-for-project', projectId),
