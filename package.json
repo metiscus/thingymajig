@@ -16,7 +16,6 @@
   "keywords": [],
   "author": "mbosse@mak.com",
   "license": "ISC",
-  "description": "",
   "dependencies": {
     "electron": "^36.2.1",
     "exceljs": "^4.4.0",
