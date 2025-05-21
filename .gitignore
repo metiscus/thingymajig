@@ -1,0 +1,35 @@
+# Node modules
+node_modules/
+
+# Production build output for React
+/dist/
+
+# Electron production build output (executables, installers)
+/build/
+release-builds/ # Common output directory for electron-builder
+
+# Electron-builder temporary files / caches
+.electron-builder/
+electron-builder.env
+
+# Local SQLite Database file
+# This database file is stored in your user's application data directory,
+# e.g., C:\Users\YourUser\AppData\Roaming\rom-planner-app\database\rom_planner.db on Windows
+# or ~/Library/Application Support/rom-planner-app/database/rom_planner.db on macOS.
+# You generally do NOT want to commit user data to your source control.
+# If you run the app and it creates a local file directly in your project root for dev purposes,
+# you would ignore it like:
+# rom_planner.db
+# However, given the `main.js` setup, it's outside the project root by default.
+
+# Log files
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# OS and editor specific files
+.DS_Store # macOS
+Thumbs.db # Windows
+.vscode/ # VS Code specific settings (optional, some teams commit this)
+.idea/ # JetBrains IDEs
