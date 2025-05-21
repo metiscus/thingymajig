@@ -1,6 +1,6 @@
 // src/stores/tasksStore.js
 import { defineStore } from 'pinia';
-import { ref, computed } from 'vue';
+import { ref, computed } from 'vue'; // Ensure computed is imported if used
 import { useRatesStore } from './ratesStore'; // To use for calculations
 
 export const useTasksStore = defineStore('tasks', () => {
@@ -12,54 +12,49 @@ export const useTasksStore = defineStore('tasks', () => {
   async function fetchTasksForProject(projectId) {
     if (!window.electronAPI || !projectId) {
       tasksList.value = [];
+      console.log('[tasksStore] fetchTasksForProject - No projectId or electronAPI, tasksList cleared.');
       return;
     }
     isLoading.value = true; error.value = null;
     try {
-      tasksList.value = await window.electronAPI.getTasksForProject(projectId);
-    } catch (e) { error.value = e.message; tasksList.value = []; }
+      const fetchedDbTasks = await window.electronAPI.getTasksForProject(projectId);
+      tasksList.value = fetchedDbTasks; // Assign the new array
+      // Defensive copy for logging to avoid issues if fetchedDbTasks is mutated elsewhere unexpectedly
+      console.log('[tasksStore] Fetched tasks for project, tasksList updated:', JSON.parse(JSON.stringify(tasksList.value)));
+    } catch (e) {
+      console.error('[tasksStore] Error in fetchTasksForProject:', e);
+      error.value = e.message;
+      tasksList.value = [];
+    }
     finally { isLoading.value = false; }
   }
 
-  async function saveTask(taskData) {
-    if (!window.electronAPI) return null;
+  async function saveTask(taskData) { // taskData is expected to be a plain object
+    if (!window.electronAPI) {
+      console.error('[tasksStore] saveTask - electronAPI not available.');
+      return null;
+    }
     isLoading.value = true; error.value = null;
-    try {
-      console.log('--- Sending taskData to main process ---');
-      console.log('Type of taskData:', typeof taskData, taskData);
-      // Log each property to inspect it, especially nested objects
-      for (const key in taskData) {
-          console.log(`taskData.${key}:`, typeof taskData[key], taskData[key]);
-          if (typeof taskData[key] === 'object' && taskData[key] !== null) {
-              console.log(`   Is ${key} a Vue proxy?`, taskData[key].__v_isReactive !== undefined || taskData[key].__v_isRef !== undefined);
-              // For efforts object specifically
-              if (key === 'efforts') {
-                  for (const effortKey in taskData[key]) {
-                      console.log(`   taskData.efforts.${effortKey}:`, typeof taskData[key][effortKey], taskData[key][effortKey]);
-                  }
-              }
-          }
-      }
-      // Use JSON.stringify as a test for plain data
-      try {
-          const jsonString = JSON.stringify(taskData);
-          console.log('taskData as JSON string (if successful):', jsonString);
-          // If this works, the object is likely cloneable or close to it.
-          // You can then try sending the parsed version:
-          // const plainTaskData = JSON.parse(jsonString);
-          // const savedTask = await window.electronAPI.saveTask(plainTaskData);
-      } catch (e) {
-          console.error('!!! taskData is NOT stringifiable, likely contains non-cloneable parts:', e);
-          // This indicates the problem area.
-      }
+    console.log('[tasksStore] Attempting to save taskData:', JSON.parse(JSON.stringify(taskData))); // Log data being sent to backend
 
-      const savedTask = await window.electronAPI.saveTask(taskData);
-      // Re-fetch or update locally. For simplicity, re-fetch if projectId context is clear.
-      if (savedTask && taskData.projectId) {
-        await fetchTasksForProject(taskData.projectId);
+    try {
+      const savedTaskFromBackend = await window.electronAPI.saveTask(taskData);
+      // Defensive copy for logging
+      console.log('[tasksStore] Saved task from backend:', savedTaskFromBackend ? JSON.parse(JSON.stringify(savedTaskFromBackend)) : null);
+
+      if (savedTaskFromBackend && taskData.projectId) {
+        console.log('[tasksStore] Backend save successful, now fetching tasks for project:', taskData.projectId);
+        await fetchTasksForProject(taskData.projectId); // This should update tasksList
+      } else if (!savedTaskFromBackend) {
+        console.error('[tasksStore] Backend did not return a saved task object.');
+        // Potentially throw an error or set error.value here
       }
-      return savedTask;
-    } catch (e) { error.value = e.message; return null; }
+      return savedTaskFromBackend; // Return the task with its DB ID
+    } catch (e) {
+      console.error('[tasksStore] Error in saveTask:', e);
+      error.value = e.message || 'Failed to save task in store.';
+      return null;
+    }
     finally { isLoading.value = false; }
   }
 
@@ -75,22 +70,20 @@ export const useTasksStore = defineStore('tasks', () => {
     } catch (e) { error.value = e.message; return false; }
     finally { isLoading.value = false; }
   }
-  
+
   async function updateTaskSequence(tasksToUpdate, projectId) {
     if (!window.electronAPI) return false;
     isLoading.value = true; error.value = null;
     try {
       const result = await window.electronAPI.updateTaskSequence(tasksToUpdate);
       if (result.success && projectId) {
-         await fetchTasksForProject(projectId); // Re-fetch to reflect new order
+         await fetchTasksForProject(projectId);
       }
       return result.success;
     } catch (e) { error.value = e.message; return false; }
      finally { isLoading.value = false; }
   }
 
-
-  // --- Computed Properties for Totals (Example) ---
   const availableRoles = computed(() => {
     if (!ratesStore.ratesList) return [];
     return ratesStore.ratesList.map(r => r.role).sort();
@@ -99,10 +92,12 @@ export const useTasksStore = defineStore('tasks', () => {
   const totalDaysPerRoleForCurrentProject = computed(() => {
     const totals = {};
     availableRoles.value.forEach(role => totals[role] = 0);
-    tasksList.value.forEach(task => {
-      for (const role in task.efforts) {
-        if (totals.hasOwnProperty(role)) {
-          totals[role] += Number(task.efforts[role] || 0);
+    (tasksList.value || []).forEach(task => { // Add guard for tasksList.value
+      if (task && task.efforts) { // Add guard for task and task.efforts
+        for (const role in task.efforts) {
+          if (totals.hasOwnProperty(role)) {
+            totals[role] += Number(task.efforts[role] || 0);
+          }
         }
       }
     });
@@ -112,45 +107,43 @@ export const useTasksStore = defineStore('tasks', () => {
   const totalCostPerRoleForCurrentProject = computed(() => {
     const costs = {};
     const roleRates = {};
-    ratesStore.ratesList.forEach(r => {
-      // Assuming daily rates for now for simplicity. Need to handle hourly vs daily properly.
-      // For now, if unit is 'hour', let's assume 8 hours = 1 day rate equivalent
-      // This logic needs to be robust based on your rate units.
-      roleRates[r.role] = r.unit === 'hour' ? r.rate * 8 : r.rate;
+    (ratesStore.ratesList || []).forEach(r => { // Add guard for ratesStore.ratesList
+      if (r && r.role && r.rate !== undefined) { // Add guard for r and its properties
+        roleRates[r.role] = r.unit === 'hour' ? Number(r.rate) * 8 : Number(r.rate);
+      }
     });
 
     availableRoles.value.forEach(role => costs[role] = 0);
     const daysPerRole = totalDaysPerRoleForCurrentProject.value;
     for (const role in daysPerRole) {
-      if (roleRates[role]) {
+      if (roleRates[role] !== undefined) { // Check if rate exists
         costs[role] = daysPerRole[role] * roleRates[role];
       }
     }
     return costs;
   });
-  
+
   const totalTravelCostForCurrentProject = computed(() => {
-    return tasksList.value.reduce((sum, task) => sum + Number(task.travelCost || 0), 0);
+    return (tasksList.value || []).reduce((sum, task) => sum + Number(task?.travelCost || 0), 0); // Add guard
   });
-  
+
   const totalMaterialsCostForCurrentProject = computed(() => {
-    return tasksList.value.reduce((sum, task) => sum + Number(task.materialsCost || 0), 0);
+    return (tasksList.value || []).reduce((sum, task) => sum + Number(task?.materialsCost || 0), 0); // Add guard
   });
 
   const grandTotalCostForCurrentProject = computed(() => {
     let sumRoleCosts = 0;
     const roleCosts = totalCostPerRoleForCurrentProject.value;
     for (const role in roleCosts) {
-      sumRoleCosts += roleCosts[role];
+      sumRoleCosts += Number(roleCosts[role] || 0); // Add guard
     }
     return sumRoleCosts + totalTravelCostForCurrentProject.value + totalMaterialsCostForCurrentProject.value;
   });
 
-
   return {
     tasksList, isLoading, error,
     fetchTasksForProject, saveTask, deleteTask, updateTaskSequence,
-    availableRoles, // To populate columns dynamically
+    availableRoles,
     totalDaysPerRoleForCurrentProject,
     totalCostPerRoleForCurrentProject,
     totalTravelCostForCurrentProject,

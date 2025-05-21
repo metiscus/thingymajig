@@ -1,4 +1,3 @@
-      
 <template>
   <div class="task-manager component-section" v-if="projectsStore.currentProject">
     <h3>Tasks for: {{ projectsStore.currentProject.name }}</h3>
@@ -6,79 +5,42 @@
     <div v-if="tasksStore.isLoading" class="loading-message">Loading tasks...</div>
     <div v-if="tasksStore.error" class="error-message">Error: {{ tasksStore.error }}</div>
 
-    <!-- "Add New Task" Button - Form is now part of the table for a new row -->
     <div class="add-task-controls">
-        <button @click="prepareNewTask" class="primary" :disabled="editingTaskId === 'new' || !!editingTaskId">
-            <i class="fas fa-plus"></i> Add New Task
-        </button>
-        <span v-if="editingTaskId === 'new' || !!editingTaskId" class="editing-hint">
-            (Complete or cancel current edit to add another)
-        </span>
+      <button @click="prepareNewTask" class="primary" :disabled="!!editingTaskId">
+        <i class="fas fa-plus"></i> Add New Task
+      </button>
+      <span v-if="editingTaskId" class="editing-hint">
+        (Complete or cancel current edit to add another)
+      </span>
     </div>
 
+    <form @submit.prevent="saveEditedTask">
+      <table v-if="localTasks.length > 0 || editingTaskId === 'new'" class="task-table editable-table">
+        <thead>
+          <tr>
+            <th class="col-drag-handle"></th> <!-- Handle for drag -->
+            <th class="col-name">Task Name</th>
+            <th class="col-description">Description</th>
+            <th v-for="header_role in tasksStore.availableRoles" :key="header_role" class="col-effort">{{ header_role }} (Days)</th>
+            <th class="col-cost">Travel</th>
+            <th class="col-cost">Materials</th>
+            <th class="col-total">Task Total Days</th>
+            <th class="col-total">Task Total Cost</th>
+            <th class="col-actions">Actions</th>
+          </tr>
+        </thead>
 
-    <!-- Task Table with Inline Editing -->
-    <form @submit.prevent="saveEditedTask"> <!-- Form wraps the table for Enter key submission -->
-        <table v-if="tasksStore.tasksList.length > 0 || editingTaskId === 'new'" class="task-table editable-table">
-          <thead>
-            <tr>
-              <th class="col-name">Task Name</th>
-              <th class="col-description">Description</th>
-              <th v-for="role in tasksStore.availableRoles" :key="role" class="col-effort">{{ role }} (Days)</th>
-              <th class="col-cost">Travel</th>
-              <th class="col-cost">Materials</th>
-              <th class="col-total">Task Total Days</th>
-              <th class="col-total">Task Total Cost</th>
-              <th class="col-actions">Actions</th>
-            </tr>
-          </thead>
-          <tbody>
-
-            <!-- Existing Tasks -->
-            <tr v-for="(task, index) in tasksStore.tasksList" :key="task.id" :class="{ 'editing-row': editingTaskId === task.id }">
-              <template v-if="editingTaskId === task.id">
-                <td><input type="text" v-model="editableTaskData.name" required ref="firstEditableInput" /></td>
-                <td><input type="text" v-model="editableTaskData.description" /></td>
-                <td v-for="role in tasksStore.availableRoles" :key="task.id + '-' + role">
-                  <input type="number" v-model.number="editableTaskData.efforts[role]" min="0" step="0.5" />
-                </td>
-                <td><input type="number" v-model.number="editableTaskData.travelCost" min="0" step="0.01" /></td>
-                <td><input type="number" v-model.number="editableTaskData.materialsCost" min="0" step="0.01" /></td>
-                <td class="read-only-cell">{{ calculateTaskTotalDays(editableTaskData) }}</td>
-                <td class="read-only-cell">{{ formatCurrency(calculateTaskTotalCost(editableTaskData)) }}</td>
-                <td class="actions-cell">
-                  <button type="submit" class="primary small-btn"><i class="fas fa-save"></i> Save</button>
-                  <button type="button" @click="cancelEdit" class="secondary small-btn"><i class="fas fa-times"></i> Cancel</button>
-                </td>
-              </template>
-              <template v-else>
-                <td @dblclick="startEdit(task, index)">{{ task.name }}</td>
-                <td @dblclick="startEdit(task, index)" class="description-cell">
-                    <span v-if="task.description">{{ task.description }}</span>
-                    <span v-else class="no-description">-</span>
-                </td>
-                <td v-for="role in tasksStore.availableRoles" :key="task.id + '-' + role" @dblclick="startEdit(task, index)">
-                  {{ task.efforts[role] || 0 }}
-                </td>
-                <td @dblclick="startEdit(task, index)">{{ formatCurrency(task.travelCost) }}</td>
-                <td @dblclick="startEdit(task, index)">{{ formatCurrency(task.materialsCost) }}</td>
-                <td class="read-only-cell">{{ calculateTaskTotalDays(task) }}</td>
-                <td class="read-only-cell">{{ formatCurrency(calculateTaskTotalCost(task)) }}</td>
-                <td class="actions-cell">
-                  <button @click="startEdit(task, index)" class="secondary small-btn" :disabled="!!editingTaskId"><i class="fas fa-edit"></i> Edit</button>
-                  <button @click="confirmDeleteTask(task.id)" class="danger small-btn" :disabled="!!editingTaskId"><i class="fas fa-trash"></i> Delete</button>
-                  <button @click="moveTask(index, -1)" :disabled="index === 0 || !!editingTaskId" class="secondary small-btn"><i class="fas fa-arrow-up"></i></button>
-                  <button @click="moveTask(index, 1)" :disabled="index === tasksStore.tasksList.length - 1 || !!editingTaskId" class="secondary small-btn"><i class="fas fa-arrow-down"></i></button>
-                </td>
-              </template>
-            </tr>
-
-            <!-- Row for adding a new task (if active) -->
-            <tr v-if="editingTaskId === 'new'" class="editing-row new-task-row">
-              <td><input type="text" v-model="editableTaskData.name" placeholder="New Task Name" required ref="firstEditableInput"/></td>
-              <td><input type="text" v-model="editableTaskData.description" placeholder="Description" /></td>
-              <td v-for="role in tasksStore.availableRoles" :key="'new-'+role">
-                <input type="number" v-model.number="editableTaskData.efforts[role]" min="0" step="0.5" />
+        <!-- tbody for existing tasks - SortableJS will target this -->
+        <tbody ref="tasksTbody" v-if="localTasks.length > 0">
+          <tr v-for="(task, index) in localTasks" :key="task.id" :data-id="task.id" 
+              :class="{ 'editing-row': editingTaskId === task.id, 'drag-item': true }">
+            <!-- {{ console.log(`[v-for rendering] Task ID: ${task.id}, Index: ${index}, Name: ${task.name}`) }} -->
+            <template v-if="editingTaskId === task.id">
+              <td class="drag-handle-cell"><i class="fas fa-grip-vertical drag-handle disabled-drag-handle"></i></td>
+              <td><input type="text" v-model="editableTaskData.name" required ref="firstEditableInput" /></td>
+              <td><input type="text" v-model="editableTaskData.description" /></td>
+              <td v-for="role_name_editor in tasksStore.availableRoles" :key="task.id + '-' + role_name_editor">
+                <input type="number" v-model.number="editableTaskData.efforts[role_name_editor]" min="0" step="0.5" />
               </td>
               <td><input type="number" v-model.number="editableTaskData.travelCost" min="0" step="0.01" /></td>
               <td><input type="number" v-model.number="editableTaskData.materialsCost" min="0" step="0.01" /></td>
@@ -88,36 +50,85 @@
                 <button type="submit" class="primary small-btn"><i class="fas fa-save"></i> Save</button>
                 <button type="button" @click="cancelEdit" class="secondary small-btn"><i class="fas fa-times"></i> Cancel</button>
               </td>
-            </tr>
-          </tbody>
-          <!-- Summary Row -->
-          <tfoot v-if="tasksStore.tasksList.length > 0 || editingTaskId === 'new'">
+            </template>
+            <template v-else>
+              <td class="drag-handle-cell"><i class="fas fa-grip-vertical drag-handle"></i></td>
+              <td @dblclick="startEdit(task, index)">{{ task.name }}</td>
+              <td @dblclick="startEdit(task, index)" class="description-cell">
+                <span v-if="task.description">{{ task.description }}</span>
+                <span v-else class="no-description">-</span>
+              </td>
+              <td v-for="role_name_display in tasksStore.availableRoles" :key="task.id + '-' + role_name_display" @dblclick="startEdit(task, index)">
+                {{ task.efforts[role_name_display] || 0 }}
+              </td>
+              <td @dblclick="startEdit(task, index)">{{ formatCurrency(task.travelCost) }}</td>
+              <td @dblclick="startEdit(task, index)">{{ formatCurrency(task.materialsCost) }}</td>
+              <td class="read-only-cell">{{ calculateTaskTotalDays(task) }}</td>
+              <td class="read-only-cell">{{ formatCurrency(calculateTaskTotalCost(task)) }}</td>
+              <td class="actions-cell">
+                <button @click="startEdit(task, index)" class="secondary small-btn" :disabled="!!editingTaskId"><i class="fas fa-edit"></i> Edit</button>
+                <button @click="confirmDeleteTask(task.id)" class="danger small-btn" :disabled="!!editingTaskId"><i class="fas fa-trash"></i> Delete</button>
+              </td>
+            </template>
+          </tr>
+        </tbody>
+        
+        <tbody v-if="localTasks.length === 0 && editingTaskId !== 'new'">
             <tr>
-              <th colspan="2">Project Totals:</th>
-              <th v-for="role in tasksStore.availableRoles" :key="'total-' + role">
-                {{ tasksStore.totalDaysPerRoleForCurrentProject[role] || 0 }}
-              </th>
-              <th>{{ formatCurrency(tasksStore.totalTravelCostForCurrentProject) }}</th>
-              <th>{{ formatCurrency(tasksStore.totalMaterialsCostForCurrentProject) }}</th>
-              <th>
-                {{ Object.values(tasksStore.totalDaysPerRoleForCurrentProject).reduce((sum, days) => sum + days, 0) }}
-              </th>
-              <th>{{ formatCurrency(tasksStore.grandTotalCostForCurrentProject) }}</th>
-              <th></th>
+                <td :colspan="7 + tasksStore.availableRoles.length" class="no-tasks-message"> 
+                    No tasks in this project yet.
+                </td>
             </tr>
-            <tr class="cost-summary">
-                <th colspan="2">Cost per Role:</th>
-                 <th v-for="role in tasksStore.availableRoles" :key="'cost-total-' + role" class="role-cost-cell">
-                    {{ formatCurrency(tasksStore.totalCostPerRoleForCurrentProject[role] || 0) }}
-                 </th>
-                 <th colspan="5"></th> <!-- Span remaining columns -->
-            </tr>
-          </tfoot>
-        </table>
-        <p v-else-if="!tasksStore.isLoading && projectsStore.currentProject && editingTaskId !== 'new'">
-            No tasks yet for this project. Click "Add New Task" to begin.
-        </p>
-    </form> <!-- End form wrapping table -->
+        </tbody>
+
+        <tbody v-if="editingTaskId === 'new'">
+          <tr class="editing-row new-task-row">
+            <td class="drag-handle-cell"><i class="fas fa-grip-vertical disabled-drag-handle"></i></td>
+            <td><input type="text" v-model="editableTaskData.name" placeholder="New Task Name" required ref="firstEditableInput"/></td>
+            <td><input type="text" v-model="editableTaskData.description" placeholder="Description" /></td>
+            <td v-for="role_name_new in tasksStore.availableRoles" :key="'new-'+role_name_new">
+              <input type="number" v-model.number="editableTaskData.efforts[role_name_new]" min="0" step="0.5" />
+            </td>
+            <td><input type="number" v-model.number="editableTaskData.travelCost" min="0" step="0.01" /></td>
+            <td><input type="number" v-model.number="editableTaskData.materialsCost" min="0" step="0.01" /></td>
+            <td class="read-only-cell">{{ calculateTaskTotalDays(editableTaskData) }}</td>
+            <td class="read-only-cell">{{ formatCurrency(calculateTaskTotalCost(editableTaskData)) }}</td>
+            <td class="actions-cell">
+              <button type="submit" class="primary small-btn"><i class="fas fa-save"></i> Save</button>
+              <button type="button" @click="cancelEdit" class="secondary small-btn"><i class="fas fa-times"></i> Cancel</button>
+            </td>
+          </tr>
+        </tbody>
+
+        <tfoot v-if="localTasks.length > 0 || editingTaskId === 'new'">
+          <tr>
+            <th class="col-drag-handle"></th>
+            <th colspan="2">Project Totals:</th>
+            <th v-for="footer_total_role in tasksStore.availableRoles" :key="'total-' + footer_total_role">
+              {{ tasksStore.totalDaysPerRoleForCurrentProject[footer_total_role] || 0 }}
+            </th>
+            <th>{{ formatCurrency(tasksStore.totalTravelCostForCurrentProject) }}</th>
+            <th>{{ formatCurrency(tasksStore.totalMaterialsCostForCurrentProject) }}</th>
+            <th>
+              {{ Object.values(tasksStore.totalDaysPerRoleForCurrentProject).reduce((sum, days) => sum + days, 0) }}
+            </th>
+            <th>{{ formatCurrency(tasksStore.grandTotalCostForCurrentProject) }}</th>
+            <th></th>
+          </tr>
+          <tr class="cost-summary">
+              <th class="col-drag-handle"></th>
+              <th colspan="2">Cost per Role:</th>
+               <th v-for="footer_cost_role in tasksStore.availableRoles" :key="'cost-total-' + footer_cost_role" class="role-cost-cell">
+                  {{ formatCurrency(tasksStore.totalCostPerRoleForCurrentProject[footer_cost_role] || 0) }}
+               </th>
+               <th :colspan="5"></th>
+          </tr>
+        </tfoot>
+      </table>
+      <p v-else-if="!tasksStore.isLoading && projectsStore.currentProject && editingTaskId !== 'new'">
+          No tasks yet for this project. Click "Add New Task" to begin.
+      </p>
+    </form>
   </div>
   <div v-else class="component-section">
     <p>Select a project to view and manage its tasks.</p>
@@ -125,7 +136,8 @@
 </template>
 
 <script setup>
-import { ref, watch, onMounted, nextTick, computed } from 'vue';
+import { ref, watch, onMounted, nextTick, toRaw, onBeforeUnmount } from 'vue';
+import Sortable from 'sortablejs'; // Import SortableJS
 import { useProjectsStore } from '../stores/projectsStore';
 import { useTasksStore } from '../stores/tasksStore';
 import { useRatesStore } from '../stores/ratesStore';
@@ -134,284 +146,286 @@ const projectsStore = useProjectsStore();
 const tasksStore = useTasksStore();
 const ratesStore = useRatesStore();
 
-const editingTaskId = ref(null); // Stores ID of task being edited, or 'new' for a new task
-const editableTaskData = ref(null); // Holds the data for the task being edited/added
-const firstEditableInput = ref(null); // Template ref for focusing the first input in edit mode
+const editingTaskId = ref(null);
+const editableTaskData = ref(null);
+const firstEditableInput = ref(null);
+const localTasks = ref([]);
+const tasksTbody = ref(null); // Template ref for the tbody element
+let sortableInstance = null;
 
-// --- FUNCTION DEFINITIONS MOVED UP ---
+watch(() => tasksStore.tasksList, (newTasksFromStore) => {
+  localTasks.value = Array.isArray(newTasksFromStore) ? [...newTasksFromStore] : [];
+  // console.log('[TaskManager] Updated localTasks. Length:', localTasks.value.length);
+  // if (localTasks.value.length > 0) {
+  //   localTasks.value.forEach(t => console.log(`  Task ID: ${t.id}, Type: ${typeof t.id}, Name: ${t.name}`));
+  // }
+
+  // Re-initialize SortableJS if tasksTbody is available and tasks have loaded
+  // This is important if tasks load after component is mounted
+  if (tasksTbody.value && localTasks.value.length > 0) {
+    initSortable();
+  }
+}, { deep: true, immediate: true });
+
+const initSortable = () => {
+  if (sortableInstance) {
+    sortableInstance.destroy(); // Destroy previous instance if exists
+  }
+  if (tasksTbody.value) { // Ensure the element is available
+    sortableInstance = Sortable.create(tasksTbody.value, {
+      handle: '.drag-handle', // Class of the element to use as a drag handle
+      animation: 150,
+      ghostClass: 'ghost-drag', // Class for the drop placeholder
+      filter: '.disabled-drag-handle', // Elements with this class won't be draggable (e.g., when editing)
+      preventOnFilter: true,
+      onEnd: async (evt) => {
+        // console.log('[SortableJS onEnd] Event:', evt);
+        if (evt.oldIndex === undefined || evt.newIndex === undefined || evt.oldIndex === evt.newIndex) {
+          return; // No change in position
+        }
+        
+        // Manually update localTasks order based on DOM reorder by SortableJS
+        const movedItem = localTasks.value.splice(evt.oldIndex, 1)[0];
+        localTasks.value.splice(evt.newIndex, 0, movedItem);
+
+        // Now update the sequence in the backend
+        const tasksToUpdateSequence = localTasks.value.map((task, index) => ({
+          id: task.id,
+          sequence: index,
+        }));
+        if (projectsStore.currentProject?.id) {
+          await tasksStore.updateTaskSequence(tasksToUpdateSequence, projectsStore.currentProject.id);
+        }
+      },
+      // Disable dragging if any task is being edited
+      onStart: (evt) => {
+        if (editingTaskId.value) {
+          // To prevent dragging when an item is being edited.
+          // SortableJS doesn't have a reactive 'disabled' prop like vuedraggable.
+          // We can try to prevent the drag from starting.
+          // This might need more robust handling or disabling sortable instance when editing starts.
+          return false; // Attempt to prevent drag
+        }
+      },
+    });
+  } else {
+    // console.warn('[SortableJS] tasksTbody ref not available for initSortable.');
+  }
+};
+
+onMounted(() => {
+  if (!ratesStore.ratesList || ratesStore.ratesList.length === 0) {
+    ratesStore.fetchRates();
+  }
+  // Initial SortableJS setup if tasks are already present (e.g. from immediate watcher)
+  // and tbody is rendered.
+  nextTick(() => { // Ensure DOM is ready
+    if (localTasks.value.length > 0 && tasksTbody.value) {
+        initSortable();
+    }
+  });
+});
+
+// Watch for editingTaskId to potentially disable/enable sortable
+watch(editingTaskId, (isEditing) => {
+    if (sortableInstance) {
+        // SortableJS's 'disabled' option is set at creation.
+        // To disable/enable dynamically, we might need to destroy and recreate,
+        // or use the 'filter' option effectively.
+        // For now, the onStart event tries to prevent dragging.
+        // A more robust way is to set sortableInstance.option('disabled', !!isEditing);
+        // if the library supports it reactively, or destroy/recreate.
+        // Let's try the option method:
+        try {
+            sortableInstance.option('disabled', !!isEditing);
+        } catch (e) {
+            // console.warn("Failed to set sortable option 'disabled'. May need destroy/recreate.", e)
+        }
+    }
+});
+
+
+onBeforeUnmount(() => {
+  if (sortableInstance) {
+    sortableInstance.destroy(); // Clean up SortableJS instance
+  }
+});
+
+
 const cancelEdit = () => {
   editingTaskId.value = null;
   editableTaskData.value = null;
 };
 
-// Helper to create a default structure for a new/editable task
 const createDefaultEditableTask = () => {
-  const efforts = {};
-  tasksStore.availableRoles.forEach(role => {
-    efforts[role] = 0;
+  const plainEfforts = {};
+  (tasksStore.availableRoles || []).forEach(role => {
+    plainEfforts[role] = 0;
   });
   return {
-    id: null, // Will be 'new' or an existing ID
+    id: null,
     projectId: projectsStore.currentProject?.id || null,
     name: '',
     description: '',
-    efforts: efforts,
+    efforts: plainEfforts,
     travelCost: 0,
     materialsCost: 0,
-    sequence: tasksStore.tasksList.length, // Default for new, will be preserved for existing
+    sequence: localTasks.value.length,
   };
 };
 
 const focusFirstInput = async () => {
-    await nextTick(); // Wait for the DOM to update
-    if (firstEditableInput.value) {
-        firstEditableInput.value.focus();
-        if (typeof firstEditableInput.value.select === 'function') {
-            firstEditableInput.value.select(); // Select text for easy replacement
-        }
+  await nextTick();
+  if (firstEditableInput.value) {
+    firstEditableInput.value.focus();
+    if (typeof firstEditableInput.value.select === 'function') {
+      firstEditableInput.value.select();
     }
-};
-// --- END OF MOVED FUNCTION DEFINITIONS ---
-
-
-// Ensure rates and initial roles are loaded for calculations and form structure
-onMounted(() => {
-  if (ratesStore.ratesList.length === 0) {
-    ratesStore.fetchRates();
   }
-});
+};
 
-
-// When the selected project changes, clear any active edits and fetch tasks
 watch(() => projectsStore.currentProject, (newProject) => {
-  cancelEdit(); // Now cancelEdit is defined before this watcher runs
+  cancelEdit();
+  if (sortableInstance) { // Destroy sortable instance for old project
+      sortableInstance.destroy();
+      sortableInstance = null;
+  }
   if (newProject) {
-    tasksStore.fetchTasksForProject(newProject.id);
+    tasksStore.fetchTasksForProject(newProject.id).then(() => {
+        nextTick(() => { // Ensure DOM has updated with new tasks before initSortable
+            if (localTasks.value.length > 0 && tasksTbody.value) {
+                 initSortable();
+            }
+        });
+    });
   } else {
-    tasksStore.tasksList = []; // Clear tasks if no project is selected
+    tasksStore.tasksList = [];
   }
 }, { immediate: true });
 
-// When available roles change (e.g., after rates are loaded/updated),
-// ensure editableTaskData.efforts is up-to-date.
 watch(() => tasksStore.availableRoles, (newRoles) => {
   if (editableTaskData.value) {
-    const newEfforts = { ...editableTaskData.value.efforts };
-    newRoles.forEach(role => {
-      if (!(role in newEfforts)) {
-        newEfforts[role] = 0;
-      }
+    const currentEffortsSource = editableTaskData.value.efforts ? toRaw(editableTaskData.value.efforts) : {};
+    const newPlainEfforts = {};
+    (newRoles || []).forEach(role => {
+      newPlainEfforts[role] = Number(currentEffortsSource[role] || 0);
     });
-    Object.keys(newEfforts).forEach(role => {
-      if (!newRoles.includes(role)) {
-        delete newEfforts[role];
-      }
-    });
-    editableTaskData.value.efforts = newEfforts;
+    editableTaskData.value.efforts = newPlainEfforts;
   }
 }, { deep: true });
 
-
 const prepareNewTask = () => {
-  if (editingTaskId.value) return; // Don't allow if already editing
+  if (editingTaskId.value) return;
   editableTaskData.value = createDefaultEditableTask();
-  if(projectsStore.currentProject?.id) { // Ensure currentProject exists
-      editableTaskData.value.projectId = projectsStore.currentProject.id;
-  } else {
-      // Handle case where no project is selected, perhaps alert user or disable 'Add New Task'
-      console.warn("Cannot prepare new task: No project selected.");
-      return;
+  if (!projectsStore.currentProject?.id) {
+    alert("Please select a project first.");
+    return;
   }
+  editableTaskData.value.projectId = projectsStore.currentProject.id;
   editingTaskId.value = 'new';
   focusFirstInput();
 };
 
 const startEdit = (task, index) => {
-  if (editingTaskId.value) return; // Don't allow if already editing
-  // Deep clone task data for editing to prevent modifying original store data directly
-  editableTaskData.value = JSON.parse(JSON.stringify(task));
-  // Ensure all available roles are present in the efforts object for the form
-  tasksStore.availableRoles.forEach(role => {
-    if (editableTaskData.value.efforts[role] === undefined || editableTaskData.value.efforts[role] === null) {
-      editableTaskData.value.efforts[role] = 0;
-    }
+  if (editingTaskId.value) return;
+  const plainTaskCopy = JSON.parse(JSON.stringify(toRaw(task)));
+  const plainEfforts = {};
+  (tasksStore.availableRoles || []).forEach(role => {
+    plainEfforts[role] = Number(plainTaskCopy.efforts?.[role] || 0);
   });
-  editableTaskData.value.sequence = index; // Preserve original sequence
+  plainTaskCopy.efforts = plainEfforts;
+  editableTaskData.value = plainTaskCopy;
+  editableTaskData.value.sequence = task.sequence !== undefined ? task.sequence : index; 
   editingTaskId.value = task.id;
   focusFirstInput();
 };
 
-
 const saveEditedTask = async () => {
+  // NEW CHECK: Only proceed if an edit was intended
+  if (!editingTaskId.value || !editableTaskData.value) {
+    // console.log('[saveEditedTask] Called but no active edit. Bailing out.');
+    // This might happen if form submitted due to focus shift after delete/re-render
+    return; 
+  }
+
   if (!editableTaskData.value || !editableTaskData.value.name || !editableTaskData.value.name.trim()) {
     alert('Task name is required.');
     return;
   }
-  if (!projectsStore.currentProject) {
+  if (!projectsStore.currentProject?.id) {
     alert('No project selected. Cannot save task.');
     return;
   }
-
-  const taskToSave = { ...editableTaskData.value };
+  const taskToSave = JSON.parse(JSON.stringify(toRaw(editableTaskData.value)));
   taskToSave.projectId = projectsStore.currentProject.id;
-
-  // Ensure efforts are numbers
-  for (const role in taskToSave.efforts) {
-    taskToSave.efforts[role] = Number(taskToSave.efforts[role] || 0);
-  }
+  if (taskToSave.efforts) {
+    for (const role in taskToSave.efforts) {
+      taskToSave.efforts[role] = Number(taskToSave.efforts[role] || 0);
+    }
+  } else { taskToSave.efforts = {}; }
   taskToSave.travelCost = Number(taskToSave.travelCost || 0);
   taskToSave.materialsCost = Number(taskToSave.materialsCost || 0);
-
-  // If it's a new task, 'id' will be null or 'new'. The backend handles new vs update.
   if (editingTaskId.value === 'new') {
-      taskToSave.id = null; // Ensure backend treats it as new
+    taskToSave.id = null;
   }
-
-
-  const saved = await tasksStore.saveTask(taskToSave);
+  const saved = await tasksStore.saveTask(taskToSave); // This will trigger fetch and re-init sortable via watcher
   if (saved) {
-    cancelEdit(); // Clear edit state
+    cancelEdit();
   } else {
     alert('Failed to save task. Check console for errors.');
   }
 };
 
-
 const confirmDeleteTask = async (taskId) => {
-  if (editingTaskId.value) return; // Prevent delete while another edit is active
+  if (editingTaskId.value) return;
   if (confirm('Are you sure you want to delete this task?')) {
     await tasksStore.deleteTask(taskId, projectsStore.currentProject.id);
+    console.log('After delete, active element is:', document.activeElement);
   }
 };
 
-const moveTask = async (currentIndex, direction) => {
-  if (editingTaskId.value) return; // Prevent reorder while editing
+// calculateTaskTotalDays, calculateTaskTotalCost, formatCurrency remain the same
+const calculateTaskTotalDays = (task) => { /* ... same ... */ if (!task || !task.efforts) return 0; return Object.values(task.efforts).reduce((sum, effort) => sum + Number(effort || 0), 0); };
+const calculateTaskTotalCost = (task) => { /* ... same ... */ if (!task || !task.efforts || !ratesStore.ratesList || ratesStore.ratesList.length === 0) return 0; let cost = 0; const roleRatesMap = ratesStore.ratesList.reduce((acc, r) => { if (r && r.role) { acc[r.role] = r.unit === 'hour' ? (Number(r.rate || 0) * 8) : Number(r.rate || 0); } return acc; }, {}); for (const role in task.efforts) { if (roleRatesMap[role] !== undefined && task.efforts[role]) { cost += Number(task.efforts[role]) * roleRatesMap[role]; } } cost += Number(task.travelCost || 0); cost += Number(task.materialsCost || 0); return cost; };
+const formatCurrency = (value) => { /* ... same ... */ return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0); };
 
-  const newIndex = currentIndex + direction;
-  if (newIndex < 0 || newIndex >= tasksStore.tasksList.length) return;
 
-  const tasksCopy = [...tasksStore.tasksList];
-  const [movedTask] = tasksCopy.splice(currentIndex, 1);
-  tasksCopy.splice(newIndex, 0, movedTask);
-
-  const tasksToUpdateSequence = tasksCopy.map((task, index) => ({
-    id: task.id,
-    sequence: index
-  }));
-
-  await tasksStore.updateTaskSequence(tasksToUpdateSequence, projectsStore.currentProject.id);
-};
-
-// --- Calculation Methods (could be moved to store if they get very complex) ---
-const calculateTaskTotalDays = (task) => {
-  if (!task || !task.efforts) return 0;
-  return Object.values(task.efforts).reduce((sum, effort) => sum + Number(effort || 0), 0);
-};
-
-const calculateTaskTotalCost = (task) => {
-  if (!task || !task.efforts || !ratesStore.ratesList || ratesStore.ratesList.length === 0) return 0;
-  let cost = 0;
-  const roleRatesMap = ratesStore.ratesList.reduce((acc, r) => {
-    acc[r.role] = r.unit === 'hour' ? (Number(r.rate) * 8) : Number(r.rate);
-    return acc;
-  }, {});
-
-  for (const role in task.efforts) {
-    if (roleRatesMap[role] && task.efforts[role]) {
-      cost += Number(task.efforts[role]) * roleRatesMap[role];
-    }
-  }
-  cost += Number(task.travelCost || 0);
-  cost += Number(task.materialsCost || 0);
-  return cost;
-};
-
-const formatCurrency = (value) => {
-  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0);
-};
-
-// Expose method for testing or if needed by parent
 defineExpose({ saveEditedTask, cancelEdit });
 
 </script>
 
 <style scoped>
-/* Uses styles from src/style.css primarily, but adds specific tweaks */
-.add-task-controls {
-  margin-bottom: 15px;
-  display: flex;
-  align-items: center;
-}
-.editing-hint {
-    margin-left: 10px;
-    font-size: 0.9em;
-    color: #777;
-}
-
+/* Styles from previous full CSS, adapted slightly */
+.add-task-controls { margin-bottom: 15px; display: flex; align-items: center; }
+.editing-hint { margin-left: 10px; font-size: 0.9em; color: #777; }
 .task-table.editable-table td input[type="text"],
 .task-table.editable-table td input[type="number"] {
-  width: 100%; /* Make inputs fill the cell */
-  padding: 6px 8px;
-  margin: -6px -8px; /* Counteract cell padding to fill space */
-  border: 1px solid #3498db; /* Highlight active input cell */
-  font-size: inherit; /* Inherit table font size */
-  height: calc(100% + 12px); /* Fill height */
+  width: 100%; padding: 6px 8px; margin: 0px -8px; /* Counteract cell padding */
+  border: 1px solid #3498db; font-size: inherit; height: calc(100% + 12px); /* Fill cell */
   box-sizing: border-box;
 }
-.task-table.editable-table td {
-  vertical-align: top; /* Align content to top for multi-line inputs */
-}
-
-.editing-row {
-  background-color: #e6f7ff !important; /* Light blue background for the row being edited */
-}
-.new-task-row td {
-    padding-top: 10px;
-    padding-bottom: 10px;
-}
-
-.actions-cell {
-  white-space: nowrap; /* Prevent action buttons from wrapping */
-  width: auto; /* Let it size to content */
-  text-align: right;
-}
-.actions-cell button.small-btn {
-    padding: 5px 8px;
-    font-size: 0.85em;
-    margin-left: 4px;
-}
-.actions-cell button.small-btn i {
-    margin-right: 4px; /* Space between icon and text */
-}
-
-
-.read-only-cell {
-    color: #555;
-    font-style: italic;
-}
-
-.description-cell {
-    max-width: 250px; /* Limit width and allow wrap */
-    white-space: normal; /* Allow wrapping */
-    font-size: 0.9em;
-    color: #444;
-}
-.no-description {
-    color: #aaa;
-    font-style: italic;
-}
-
-/* Column width hints - adjust as needed */
+.task-table.editable-table td { vertical-align: middle; } /* Better for inputs */
+.editing-row { background-color: #e6f7ff !important; }
+.new-task-row td { padding-top: 10px; padding-bottom: 10px; } /* More space for new row inputs */
+.actions-cell { white-space: nowrap; text-align: right; }
+.actions-cell button.small-btn { padding: 5px 8px; font-size: 0.85em; margin-left: 4px; }
+.actions-cell button.small-btn i { margin-right: 4px; }
+.read-only-cell { color: #555; font-style: italic; }
+.description-cell { max-width: 250px; white-space: normal; font-size: 0.9em; color: #444; }
+.no-description { color: #aaa; font-style: italic; }
+.no-tasks-message { text-align: center; padding: 20px; color: #777; font-style: italic; }
+.col-drag-handle { width: 30px; }
 .col-name { width: 20%; }
 .col-description { width: 25%; }
-.col-effort { width: 8%; text-align: center; }
+.col-effort { width: auto; min-width: 70px; text-align: center; }
 .col-cost { width: 10%; text-align: right; }
 .col-total { width: 10%; text-align: right; font-weight: bold; }
-.col-actions { width: 15%; text-align: center;}
-
-.task-table tfoot .role-cost-cell {
-    font-size: 0.85em;
-    text-align: right;
-    font-weight: normal;
-}
+.col-actions { width: auto; min-width: 120px; text-align: center;}
+.task-table tfoot .role-cost-cell { font-size: 0.85em; text-align: right; font-weight: normal; }
+.drag-handle-cell { width: 30px; text-align: center; padding-left: 8px; padding-right: 8px; }
+.drag-handle { cursor: grab; color: #aaa; }
+.drag-handle:hover { color: #777; }
+.disabled-drag-handle { cursor: default; color: #ddd; }
+.ghost-drag { opacity: 0.5; background: #c8ebfb; } /* SortableJS ghost class */
+.sortable-chosen { /* SortableJS class for the item being dragged */ }
 </style>

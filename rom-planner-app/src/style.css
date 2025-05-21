@@ -42,9 +42,10 @@ button:hover {
 
 table {
   width: 100%;
-  border-collapse: collapse;
-  margin-top: 15px;
-  margin-bottom: 15px;
+  border-collapse: collapse; /* Keeps borders clean */
+  margin-bottom: 20px;
+  background-color: #fff;
+  font-size: 0.95em; /* Existing */
 }
 
 th, td {
@@ -52,6 +53,7 @@ th, td {
   padding: 8px;
   text-align: left;
   color: #333333; /* Text color in table cells */
+  vertical-align: middle;
 }
 
 th {
