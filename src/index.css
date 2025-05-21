@@ -1,0 +1,74 @@
+body {
+  font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+  margin: 0;
+  padding: 0;
+  background-color: #eef1f5;
+  color: #333;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+#root {
+  display: flex;
+  justify-content: center;
+  padding: 20px;
+}
+
+h1, h2, h3 {
+  color: #2c3e50;
+  margin-top: 0;
+  margin-bottom: 15px;
+}
+
+button {
+  background-color: #3498db; /* Blue */
+  color: white;
+  padding: 8px 12px;
+  border: none;
+  border-radius: 5px;
+  cursor: pointer;
+  margin-right: 8px;
+  font-size: 0.9em;
+  transition: background-color 0.2s ease;
+}
+
+button:hover {
+  background-color: #2980b9;
+}
+
+button:active {
+  background-color: #2471a3;
+}
+
+button.delete-button {
+  background-color: #e74c3c; /* Red for delete */
+}
+
+button.delete-button:hover {
+  background-color: #c0392b;
+}
+
+input[type="text"], input[type="number"] {
+  padding: 8px 10px;
+  border: 1px solid #ccc;
+  border-radius: 5px;
+  box-sizing: border-box; /* Include padding and border in element's total width/height */
+  font-size: 0.9em;
+  transition: border-color 0.2s ease;
+}
+
+input[type="text"]:focus, input[type="number"]:focus {
+  border-color: #3498db;
+  outline: none;
+}
+
+.loading, .error {
+  text-align: center;
+  padding: 50px;
+  font-size: 1.2em;
+  color: #555;
+}
+
+.error {
+  color: #e74c3c;
+}

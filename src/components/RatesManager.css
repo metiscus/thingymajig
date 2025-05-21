@@ -1,0 +1,26 @@
+.rates-manager table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+}
+
+.rates-manager th, .rates-manager td {
+  border: 1px solid #eee;
+  padding: 10px;
+  text-align: left;
+}
+
+.rates-manager th {
+  background-color: #f8f8f8;
+  font-weight: bold;
+  color: #555;
+}
+
+.rates-manager tr:nth-child(even) {
+  background-color: #fcfcfc;
+}
+
+.rates-manager input[type="number"] {
+  width: 80px; /* Adjust width for number input */
+  padding: 6px;
+}

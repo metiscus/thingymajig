@@ -1,0 +1,45 @@
+{
+  "name": "rom-planner-app",
+  "version": "1.0.0",
+  "description": "Rough Order of Magnitude Planning App",
+  "main": "main.js",
+  "private": true,
+  "scripts": {
+    "start": "concurrently \"npm run electron-dev\" \"npm run react-dev\"",
+    "electron-dev": "wait-on tcp:5173 && electron .",
+    "react-dev": "vite",
+    "build-react": "vite build",
+    "build-electron": "electron-builder --dir",
+    "dist": "npm run build-react && electron-builder",
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "keywords": [],
+  "author": "mbosse@mak.com",
+  "license": "ISC",
+  "description": "",
+  "dependencies": {
+    "electron": "^36.2.1",
+    "exceljs": "^4.4.0",
+    "react": "^19.1.0",
+    "react-dom": "^19.1.0",
+    "sqlite3": "^5.1.7"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.4.1",
+    "concurrently": "^9.1.2",
+    "electron-builder": "^26.0.12",
+    "vite": "^6.3.5",
+    "wait-on": "^8.0.3"
+  },
+  "build": {
+    "appId": "com.mak.romplanner",
+    "files": [
+      "main.js",
+      "preload.js",
+      "dist/**/*"
+    ],
+    "directories": {
+      "buildResources": "assets"
+    }
+  }
+}
