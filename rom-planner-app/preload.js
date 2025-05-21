@@ -18,6 +18,11 @@ contextBridge.exposeInMainWorld('electronAPI', {
   deleteTask: (taskId) => ipcRenderer.invoke('delete-task', taskId),
   updateTaskSequence: (tasksToUpdate) => ipcRenderer.invoke('update-task-sequence', tasksToUpdate),
 
+  // Material Items
+  getMaterialItemsForProject: (projectId) => ipcRenderer.invoke('get-material-items-for-project', projectId),
+  saveMaterialItem: (itemData) => ipcRenderer.invoke('save-material-item', itemData),
+  deleteMaterialItem: (itemId) => ipcRenderer.invoke('delete-material-item', itemId),
+
 });
 
 console.log('Preload script loaded with electronAPI.');
