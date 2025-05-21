@@ -1,0 +1,93 @@
+/* src/style.css or <style> in App.vue (not scoped) */
+body {
+  margin: 0;
+  font-family: Avenir, Helvetica, Arial, sans-serif;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  color: #2c3e50; /* Dark gray for text - good default */
+  background-color: #ffffff; /* White background for the whole page */
+}
+
+#app, #app-container { /* Assuming #app or #app-container is your main wrapper */
+  background-color: transparent; /* Ensure it doesn't override body's white */
+}
+
+/* General form styling - you can make this more specific */
+input[type="text"],
+input[type="number"],
+input[type="email"], /* Add other input types as needed */
+select,
+textarea {
+  color: #333333; /* Text color inside inputs */
+  background-color: #ffffff; /* Background of inputs */
+  border: 1px solid #cccccc;
+  padding: 8px;
+  border-radius: 4px;
+  box-sizing: border-box; /* Good practice for inputs */
+}
+
+button {
+  color: #ffffff; /* White text on buttons */
+  background-color: #4CAF50; /* Green background - example */
+  border: none;
+  padding: 10px 15px;
+  border-radius: 4px;
+  cursor: pointer;
+  margin: 5px; /* Add some margin */
+}
+
+button:hover {
+  background-color: #45a049; /* Darker green on hover */
+}
+
+table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+  margin-bottom: 15px;
+}
+
+th, td {
+  border: 1px solid #dddddd; /* Lighter border for tables */
+  padding: 8px;
+  text-align: left;
+  color: #333333; /* Text color in table cells */
+}
+
+th {
+  background-color: #f2f2f2; /* Light gray background for table headers */
+  font-weight: bold;
+}
+
+/* Specific overrides if necessary */
+.project-list li {
+  background-color: #f9f9f9; /* Light background for list items */
+  color: #333; /* Ensure text is readable */
+}
+.project-list li.selected {
+  background-color: #e0f0ff; /* Light blue for selected */
+  border-left: 3px solid #42b983;
+  color: #2c3e50;
+}
+
+/* Header and Nav from App.vue (if they were problematic) */
+header {
+  background-color: #42b983; /* Your existing green */
+  color: white;
+  padding: 10px 20px;
+  text-align: center;
+}
+
+nav {
+  background-color: #f0f0f0; /* Light gray nav background */
+  padding: 10px 20px;
+  text-align: center;
+  border-bottom: 1px solid #ddd;
+}
+nav button {
+  background-color: #5cb85c; /* A slightly different green for nav buttons */
+  color: white;
+}
+nav button:hover {
+  background-color: #4cae4c;
+}
