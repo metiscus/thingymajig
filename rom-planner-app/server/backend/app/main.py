@@ -15,8 +15,13 @@ from app.routers import (
     export
 )
 
-# Import models to ensure SQLModel.metadata has all table definitions
-from app.models import Project, Rate, Task, MaterialItem, GlobalMaterial
+# Explicitly import models in dependency order
+# This ensures that 'Project' is fully registered with metadata before 'Task' or 'MaterialItem' are.
+from app.models import Rate # Independent
+from app.models import GlobalMaterial # Independent
+from app.models import Project # Parent
+from app.models import Task # Child of Project
+from app.models import MaterialItem # Child of Project
 
 app = FastAPI(
     title="ROM Planner API",
