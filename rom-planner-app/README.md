@@ -10,8 +10,8 @@
 1. podman-compose up --build -d
 
 ## Stop the backend
-a. podman-compose down -v # this wipes the database
-b. podman-compose down # this does not wipe the database
+1. podman-compose down -v # this wipes the database
+2. podman-compose down # this does not wipe the database
 
 # Frontend Info
 ## Setup the frontend
