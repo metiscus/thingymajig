@@ -1,0 +1,53 @@
+# rom-planner-collaborative/podman-compose.yaml
+version: '3.8'
+
+services:
+  db:
+    # Use the official PostgreSQL 16 image (alpine for smaller size)
+    image: postgres:16-alpine
+    restart: always
+    # Environment variables for PostgreSQL
+    environment:
+      POSTGRES_DB: ${POSTGRES_DB}
+      POSTGRES_USER: ${POSTGRES_USER}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
+    # Mount a volume to persist database data
+    volumes:
+      - db_data:/var/lib/postgresql/data
+    # Health check to ensure the database is ready before the API starts
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U $$POSTGRES_USER -d $$POSTGRES_DB"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  api:
+    # Build the image from the 'backend' directory using its Containerfile
+    build:
+      context: ./backend
+      dockerfile: Containerfile
+    restart: always
+    # Environment variables for the FastAPI app
+    environment:
+      # This DATABASE_URL connects to the 'db' service within the Podman network
+      DATABASE_URL: postgresql://${POSTGRES_USER}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB}
+      # Set CORS origins for development (Vite dev server)
+      FRONTEND_CORS_ORIGINS: "http://localhost:5173"
+      # Set to "true" for development to enable FastAPI's auto-reload
+      # UVICORN_RELOAD: "true" # Uncomment and adjust CMD in Containerfile if you want hot-reloading
+    # Map container port 8000 to host port 8000
+    ports:
+      - "8000:8000"
+    # Ensure the database service is healthy before starting the API service
+    depends_on:
+      db:
+        condition: service_healthy
+    # Mount the backend source code for development.
+    # This allows changes to Python files to be reflected immediately in the container.
+    # For production, you'd usually bake the code into the image directly.
+    volumes:
+      - ./backend/app:/app/app
+
+# Define a named volume for persistent database data
+volumes:
+  db_data:
