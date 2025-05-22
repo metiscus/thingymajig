@@ -1,6 +1,7 @@
 import os
 import shutil
 import tempfile
+import subprocess
 
 # --- Configuration ---
 # List of directories and/or individual files to process.
@@ -111,6 +112,7 @@ def process_configured_paths(paths_to_process_list):
             print(f"They are located in: {temp_dir_path}")
             print("\nIMPORTANT: This temporary directory and its contents will be DELETED when you press Enter.")
             print("COPY THE FILES from the directory above to another location NOW if you need them.")
+            subprocess.run(["explorer.exe", temp_dir_path])
             input("Press Enter to continue and clean up the temporary directory...")
         else:
             print("\nNo files were processed. Check your 'source_paths' configuration and ensure paths are correct.")
