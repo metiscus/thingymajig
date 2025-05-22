@@ -1,22 +1,24 @@
 // src/stores/materialItemsStore.js
 import { defineStore } from 'pinia';
 import { ref, computed } from 'vue';
+import { httpAPI } from '../services/httpAPI'; // <--- NEW IMPORT
 
 export const useMaterialItemsStore = defineStore('materialItems', () => {
-  const materialItemsList = ref([]); // For the currently selected project
-  const globalMaterialList = ref([]); // New: For globally stored materials
+  const materialItemsList = ref([]);
+  const globalMaterialList = ref([]);
   const isLoading = ref(false);
   const error = ref(null);
 
   async function fetchMaterialItemsForProject(projectId) {
-    if (!window.electronAPI || !projectId) {
+    // REMOVE check for window.electronAPI
+    if (!projectId) {
       materialItemsList.value = [];
       return;
     }
     isLoading.value = true;
     error.value = null;
     try {
-      const items = await window.electronAPI.getMaterialItemsForProject(projectId);
+      const items = await httpAPI.getMaterialItemsForProject(projectId); // <--- CHANGE HERE
       materialItemsList.value = items;
     } catch (e) {
       console.error('Failed to fetch material items:', e);
@@ -27,15 +29,10 @@ export const useMaterialItemsStore = defineStore('materialItems', () => {
     }
   }
 
-  // New: Fetch global materials
   async function fetchGlobalMaterials() {
-    if (!window.electronAPI) {
-      console.warn('Electron API not available. Cannot fetch global materials.');
-      globalMaterialList.value = [];
-      return;
-    }
+    // REMOVE check for window.electronAPI
     try {
-      const items = await window.electronAPI.getGlobalMaterials();
+      const items = await httpAPI.getGlobalMaterials(); // <--- CHANGE HERE
       globalMaterialList.value = items;
     } catch (e) {
       console.error('Failed to fetch global materials:', e);
@@ -43,15 +40,12 @@ export const useMaterialItemsStore = defineStore('materialItems', () => {
     }
   }
 
-  async function saveMaterialItem(itemData) { // { id?, projectId, lineItem, vendor, category, unitPrice, quantity, comment }
-    if (!window.electronAPI) {
-      error.value = 'Electron API not available.';
-      return null;
-    }
+  async function saveMaterialItem(itemData) {
+    // REMOVE check for window.electronAPI
     isLoading.value = true;
     error.value = null;
     try {
-      const savedItem = await window.electronAPI.saveMaterialItem(itemData);
+      const savedItem = await httpAPI.saveMaterialItem(itemData); // <--- CHANGE HERE
       if (savedItem && itemData.projectId) {
         await fetchMaterialItemsForProject(itemData.projectId);
       }
@@ -66,14 +60,11 @@ export const useMaterialItemsStore = defineStore('materialItems', () => {
   }
 
   async function deleteMaterialItem(itemId, projectId) {
-    if (!window.electronAPI) {
-      error.value = 'Electron API not available.';
-      return false;
-    }
+    // REMOVE check for window.electronAPI
     isLoading.value = true;
     error.value = null;
     try {
-      const result = await window.electronAPI.deleteMaterialItem(itemId);
+      const result = await httpAPI.deleteMaterialItem(itemId); // <--- CHANGE HERE
       if (result.success && projectId) {
         await fetchMaterialItemsForProject(projectId);
       }
@@ -87,12 +78,11 @@ export const useMaterialItemsStore = defineStore('materialItems', () => {
     }
   }
 
-  // New: Save global material (e.g., from a separate management view)
   async function saveGlobalMaterial(materialData) {
-    if (!window.electronAPI) return null;
+    // REMOVE check for window.electronAPI
     try {
-      const saved = await window.electronAPI.saveGlobalMaterial(materialData);
-      await fetchGlobalMaterials(); // Refresh global list after save
+      const saved = await httpAPI.saveGlobalMaterial(materialData); // <--- CHANGE HERE
+      await fetchGlobalMaterials();
       return saved;
     } catch (e) {
       console.error('Failed to save global material:', e);
@@ -100,13 +90,12 @@ export const useMaterialItemsStore = defineStore('materialItems', () => {
     }
   }
 
-  // New: Delete global material
   async function deleteGlobalMaterial(materialId) {
-    if (!window.electronAPI) return false;
+    // REMOVE check for window.electronAPI
     try {
-      const result = await window.electronAPI.deleteGlobalMaterial(materialId);
+      const result = await httpAPI.deleteGlobalMaterial(materialId); // <--- CHANGE HERE
       if (result.success) {
-        await fetchGlobalMaterials(); // Refresh global list
+        await fetchGlobalMaterials();
       }
       return result.success;
     } catch (e) {

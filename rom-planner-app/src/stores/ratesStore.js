@@ -1,59 +1,38 @@
 // src/stores/ratesStore.js
 import { defineStore } from 'pinia';
 import { ref } from 'vue';
+import { httpAPI } from '../services/httpAPI'; // <--- NEW IMPORT
 
 export const useRatesStore = defineStore('rates', () => {
-  const ratesList = ref([]); // Holds the list of rate objects {id, role, rate, unit}
+  const ratesList = ref([]);
   const isLoading = ref(false);
   const error = ref(null);
 
   async function fetchRates() {
-    if (!window.electronAPI) {
-      console.error('electronAPI is not available. Running in browser without Electron context?');
-      error.value = 'Electron API not available. Cannot fetch rates.';
-      ratesList.value = [ // Mock data for browser testing
-        { id: 1, role: 'Engineer (Browser Mock)', rate: 100, unit: 'hour' },
-        { id: 2, role: 'Designer (Browser Mock)', rate: 800, unit: 'day' },
-      ];
-      return;
-    }
+    // REMOVE check for window.electronAPI and mock data
     isLoading.value = true;
     error.value = null;
     try {
-      const fetchedRates = await window.electronAPI.getRates();
+      const fetchedRates = await httpAPI.getRates(); // <--- CHANGE HERE
       ratesList.value = fetchedRates;
     } catch (e) {
       console.error('Failed to fetch rates:', e);
       error.value = e.message || 'Failed to fetch rates.';
+      ratesList.value = []; // Clear data on error
     } finally {
       isLoading.value = false;
     }
   }
 
-  async function saveRate(rateData) { // rateData = { role, rate, unit }
-    if (!window.electronAPI) {
-      console.error('electronAPI is not available.');
-      error.value = 'Electron API not available. Cannot save rate.';
-      return null;
-    }
+  async function saveRate(rateData) {
+    // REMOVE check for window.electronAPI
     isLoading.value = true;
     error.value = null;
     try {
-      const savedRate = await window.electronAPI.saveRate(rateData);
-      // Efficiently update or add the rate in the local list
-      const index = ratesList.value.findIndex(r => r.role === savedRate.role);
-      if (index !== -1) {
-        ratesList.value[index] = savedRate;
-      } else {
-        // If it was a new role, it might not have an ID from the initial fetch
-        // or the savedRate might be a completely new record. Re-fetch or smartly add.
-        // For simplicity now, we'll just add it if it's truly new by role,
-        // or assume the DB handles uniqueness and the returned object is the source of truth.
-        // A more robust way if 'id' is always returned and consistent:
-        // const existingById = ratesList.value.findIndex(r => r.id === savedRate.id);
-        // if (existingById !== -1) ratesList.value[existingById] = savedRate; else ratesList.value.push(savedRate);
-        await fetchRates(); // Easiest way to ensure consistency for now
-      }
+      const savedRate = await httpAPI.saveRate(rateData); // <--- CHANGE HERE
+      // Optimistically update or re-fetch for simplicity
+      // A full re-fetch is safer for now if backend's upsert logic means ID might not always be 'new' or predictable
+      await fetchRates();
       return savedRate;
     } catch (e) {
       console.error('Failed to save rate:', e);
@@ -65,15 +44,11 @@ export const useRatesStore = defineStore('rates', () => {
   }
 
   async function deleteRate(rateId) {
-    if (!window.electronAPI) {
-      console.error('electronAPI is not available.');
-      error.value = 'Electron API not available. Cannot delete rate.';
-      return false;
-    }
+    // REMOVE check for window.electronAPI
     isLoading.value = true;
     error.value = null;
     try {
-      const result = await window.electronAPI.deleteRate(rateId);
+      const result = await httpAPI.deleteRate(rateId); // <--- CHANGE HERE
       if (result.success) {
         ratesList.value = ratesList.value.filter(r => r.id !== rateId);
         return true;
