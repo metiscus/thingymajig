@@ -20,3 +20,15 @@ APP_NAME = "ROM Planner API"
 AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY")
 if not AUTH_SECRET_KEY:
     raise ValueError("AUTH_SECRET_KEY environment variable not set. This is required for JWT.")
+
+# --- NEW: RFI Storage Path ---
+RFI_STORAGE_BASE_PATH_STR = os.getenv("RFI_STORAGE_BASE_PATH", "/app/media/rfi_uploads")
+# Ensure it's an absolute path for consistency, though relative might work inside container if CWD is /app
+if not os.path.isabs(RFI_STORAGE_BASE_PATH_STR):
+    # Assuming CWD is /app if running in container, adjust if necessary for local dev
+    RFI_STORAGE_BASE_PATH_STR = os.path.join(os.getcwd(), RFI_STORAGE_BASE_PATH_STR)
+    print(f"Warning: RFI_STORAGE_BASE_PATH was relative, resolved to: {RFI_STORAGE_BASE_PATH_STR}")
+
+RFI_STORAGE_BASE_PATH = RFI_STORAGE_BASE_PATH_STR
+# It might be better to use pathlib.Path for RFI_STORAGE_BASE_PATH later in the router.
+# For now, keeping it as a string in config.
