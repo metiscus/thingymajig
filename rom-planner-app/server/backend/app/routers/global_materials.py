@@ -4,7 +4,8 @@ from sqlmodel import Session, select
 from typing import List, Optional
 
 from app.database import get_session
-from app.models import GlobalMaterial, GlobalMaterialBase
+from app.models import GlobalMaterial, GlobalMaterialBase, User # NEW: Import User
+from app.auth import current_active_user, current_superuser # NEW: Import auth dependencies
 
 router = APIRouter(prefix="/global_materials", tags=["Global Materials"])
 
@@ -15,15 +16,24 @@ class GlobalMaterialUpdate(GlobalMaterialBase):
     unitPrice: Optional[float] = None
 
 @router.get("/", response_model=List[GlobalMaterial])
-def read_global_materials(*, session: Session = Depends(get_session)):
-    """Fetches all global material definitions."""
+async def read_global_materials(
+    *,
+    session: Session = Depends(get_session),
+    current_user: User = Depends(current_active_user) # Requires authentication to read
+):
+    """Fetches all global material definitions (requires authentication)."""
     materials = session.exec(select(GlobalMaterial).order_by(GlobalMaterial.name)).all()
     return materials
 
 @router.post("/", response_model=GlobalMaterial, status_code=status.HTTP_201_CREATED)
-def create_or_update_global_material(*, session: Session = Depends(get_session), material_in: GlobalMaterialBase):
+async def create_or_update_global_material(
+    *,
+    session: Session = Depends(get_session),
+    material_in: GlobalMaterialBase,
+    current_user: User = Depends(current_superuser) # Requires superuser privileges
+):
     """
-    Creates a new global material or updates an existing one if the name already exists.
+    Creates a new global material or updates an existing one if the name already exists (superuser only).
     Behaves like an UPSERT based on 'name'.
     """
     existing_material = session.exec(select(GlobalMaterial).where(GlobalMaterial.name == material_in.name)).first()
@@ -42,13 +52,18 @@ def create_or_update_global_material(*, session: Session = Depends(get_session),
     return db_material
 
 @router.put("/{material_id}", response_model=GlobalMaterial)
-def update_global_material(*, session: Session = Depends(get_session), material_id: int, material_in: GlobalMaterialUpdate):
-    """Updates an existing global material by ID."""
+async def update_global_material(
+    *,
+    session: Session = Depends(get_session),
+    material_id: int,
+    material_in: GlobalMaterialUpdate,
+    current_user: User = Depends(current_active_user)
+):
+    """Updates an existing global material by ID (superuser only)."""
     db_material = session.get(GlobalMaterial, material_id)
     if not db_material:
         raise HTTPException(status_code=404, detail="Global material not found")
     
-    # If name is being changed, check for conflict
     if material_in.name and material_in.name != db_material.name:
         existing_by_new_name = session.exec(select(GlobalMaterial).where(GlobalMaterial.name == material_in.name)).first()
         if existing_by_new_name and existing_by_new_name.id != material_id:
@@ -64,8 +79,13 @@ def update_global_material(*, session: Session = Depends(get_session), material_
     return db_material
 
 @router.delete("/{material_id}", status_code=status.HTTP_204_NO_CONTENT)
-def delete_global_material(*, session: Session = Depends(get_session), material_id: int):
-    """Deletes a global material by ID."""
+async def delete_global_material(
+    *,
+    session: Session = Depends(get_session),
+    material_id: int,
+    current_user: User = Depends(current_active_user)
+):
+    """Deletes a global material by ID (superuser only)."""
     material = session.get(GlobalMaterial, material_id)
     if not material:
         raise HTTPException(status_code=404, detail="Global material not found")

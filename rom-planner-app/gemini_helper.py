@@ -13,12 +13,21 @@ source_paths = [
     "src/components",
     "src/assets",
     "src/stores",
+    "src/views",
+    "src/router",
+    "src/services",
+    "src/App.vue",
     "public",  # For files like index.html template if they are in public/
     "./index.html",
     "./main.cjs",  # Example based on your previous list
     "./package.json",
     "./preload.js", # Example based on your previous list
-    "./vite.config.js"
+    "./vite.config.js",
+    "server",
+    "server/backend",
+    "server/backend/app",
+    "server/backend/app/routers",
+    "server/backend/app/services",
 ]
 # --- End Configuration ---
 
@@ -79,12 +88,19 @@ def process_configured_paths(paths_to_process_list):
                 print(f"WARNING: Source item '{item_path_str}' (resolved to '{abs_item_path}') does not exist. Skipping.")
                 continue
 
+            if "__pycache__" in str(abs_item_path):
+                print(f"Warning: Skipping pycache directories.")
+                continue
+
             if os.path.isdir(abs_item_path):
                 print(f"Scanning directory: '{item_path_str}' (resolved to '{abs_item_path}')")
                 for dirpath, _, filenames in os.walk(abs_item_path):
                     for filename in filenames:
                         original_file_abs_path = os.path.join(dirpath, filename)
                         
+                        if "__pycache__" in str(original_file_abs_path):
+                            continue
+
                         # Path for naming should be relative to CWD for consistent output names
                         # This ensures "src/file.js" and "./src/file.js" produce "src_file.txt"
                         path_for_naming = os.path.relpath(original_file_abs_path, os.getcwd())

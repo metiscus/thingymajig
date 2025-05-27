@@ -34,7 +34,6 @@
         <tbody ref="tasksTbody" v-if="localTasks.length > 0">
           <tr v-for="(task, index) in localTasks" :key="task.id" :data-id="task.id" 
               :class="{ 'editing-row': editingTaskId === task.id, 'drag-item': true }">
-            <!-- {{ console.log(`[v-for rendering] Task ID: ${task.id}, Index: ${index}, Name: ${task.name}`) }} -->
             <template v-if="editingTaskId === task.id">
               <td class="drag-handle-cell"><i class="fas fa-grip-vertical drag-handle disabled-drag-handle"></i></td>
               <td><input type="text" v-model="editableTaskData.name" required ref="firstEditableInput" /></td>
@@ -137,7 +136,7 @@
 
 <script setup>
 import { ref, watch, onMounted, nextTick, toRaw, onBeforeUnmount } from 'vue';
-import Sortable from 'sortablejs'; // Import SortableJS
+import Sortable from 'sortablejs';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useTasksStore } from '../stores/tasksStore';
 import { useRatesStore } from '../stores/ratesStore';
@@ -150,18 +149,41 @@ const editingTaskId = ref(null);
 const editableTaskData = ref(null);
 const firstEditableInput = ref(null);
 const localTasks = ref([]);
-const tasksTbody = ref(null); // Template ref for the tbody element
+const tasksTbody = ref(null);
 let sortableInstance = null;
+
+// ... (keep all the existing script logic - just the template and styles needed updating)
+
+const calculateTaskTotalDays = (task) => { 
+  if (!task || !task.efforts) return 0; 
+  return Object.values(task.efforts).reduce((sum, effort) => sum + Number(effort || 0), 0); 
+};
+
+const calculateTaskTotalCost = (task) => { 
+  if (!task || !task.efforts || !ratesStore.ratesList || ratesStore.ratesList.length === 0) return 0; 
+  let cost = 0; 
+  const roleRatesMap = ratesStore.ratesList.reduce((acc, r) => { 
+    if (r && r.role) { 
+      acc[r.role] = r.unit === 'hour' ? (Number(r.rate || 0) * 8) : Number(r.rate || 0); 
+    } 
+    return acc; 
+  }, {}); 
+  for (const role in task.efforts) { 
+    if (roleRatesMap[role] !== undefined && task.efforts[role]) { 
+      cost += Number(task.efforts[role]) * roleRatesMap[role]; 
+    } 
+  } 
+  cost += Number(task.travelCost || 0); 
+  cost += Number(task.materialsCost || 0); 
+  return cost; 
+};
+
+const formatCurrency = (value) => { 
+  return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0); 
+};
 
 watch(() => tasksStore.tasksList, (newTasksFromStore) => {
   localTasks.value = Array.isArray(newTasksFromStore) ? [...newTasksFromStore] : [];
-  // console.log('[TaskManager] Updated localTasks. Length:', localTasks.value.length);
-  // if (localTasks.value.length > 0) {
-  //   localTasks.value.forEach(t => console.log(`  Task ID: ${t.id}, Type: ${typeof t.id}, Name: ${t.name}`));
-  // }
-
-  // Re-initialize SortableJS if tasksTbody is available and tasks have loaded
-  // This is important if tasks load after component is mounted
   if (tasksTbody.value && localTasks.value.length > 0) {
     initSortable();
   }
@@ -169,26 +191,21 @@ watch(() => tasksStore.tasksList, (newTasksFromStore) => {
 
 const initSortable = () => {
   if (sortableInstance) {
-    sortableInstance.destroy(); // Destroy previous instance if exists
+    sortableInstance.destroy();
   }
-  if (tasksTbody.value) { // Ensure the element is available
+  if (tasksTbody.value) {
     sortableInstance = Sortable.create(tasksTbody.value, {
-      handle: '.drag-handle', // Class of the element to use as a drag handle
+      handle: '.drag-handle',
       animation: 150,
-      ghostClass: 'ghost-drag', // Class for the drop placeholder
-      filter: '.disabled-drag-handle', // Elements with this class won't be draggable (e.g., when editing)
+      ghostClass: 'ghost-drag',
+      filter: '.disabled-drag-handle',
       preventOnFilter: true,
       onEnd: async (evt) => {
-        // console.log('[SortableJS onEnd] Event:', evt);
         if (evt.oldIndex === undefined || evt.newIndex === undefined || evt.oldIndex === evt.newIndex) {
-          return; // No change in position
+          return;
         }
-        
-        // Manually update localTasks order based on DOM reorder by SortableJS
         const movedItem = localTasks.value.splice(evt.oldIndex, 1)[0];
         localTasks.value.splice(evt.newIndex, 0, movedItem);
-
-        // Now update the sequence in the backend
         const tasksToUpdateSequence = localTasks.value.map((task, index) => ({
           id: task.id,
           sequence: index,
@@ -197,19 +214,12 @@ const initSortable = () => {
           await tasksStore.updateTaskSequence(tasksToUpdateSequence, projectsStore.currentProject.id);
         }
       },
-      // Disable dragging if any task is being edited
       onStart: (evt) => {
         if (editingTaskId.value) {
-          // To prevent dragging when an item is being edited.
-          // SortableJS doesn't have a reactive 'disabled' prop like vuedraggable.
-          // We can try to prevent the drag from starting.
-          // This might need more robust handling or disabling sortable instance when editing starts.
-          return false; // Attempt to prevent drag
+          return false;
         }
       },
     });
-  } else {
-    // console.warn('[SortableJS] tasksTbody ref not available for initSortable.');
   }
 };
 
@@ -217,40 +227,28 @@ onMounted(() => {
   if (!ratesStore.ratesList || ratesStore.ratesList.length === 0) {
     ratesStore.fetchRates();
   }
-  // Initial SortableJS setup if tasks are already present (e.g. from immediate watcher)
-  // and tbody is rendered.
-  nextTick(() => { // Ensure DOM is ready
+  nextTick(() => {
     if (localTasks.value.length > 0 && tasksTbody.value) {
         initSortable();
     }
   });
 });
 
-// Watch for editingTaskId to potentially disable/enable sortable
 watch(editingTaskId, (isEditing) => {
     if (sortableInstance) {
-        // SortableJS's 'disabled' option is set at creation.
-        // To disable/enable dynamically, we might need to destroy and recreate,
-        // or use the 'filter' option effectively.
-        // For now, the onStart event tries to prevent dragging.
-        // A more robust way is to set sortableInstance.option('disabled', !!isEditing);
-        // if the library supports it reactively, or destroy/recreate.
-        // Let's try the option method:
         try {
             sortableInstance.option('disabled', !!isEditing);
         } catch (e) {
-            // console.warn("Failed to set sortable option 'disabled'. May need destroy/recreate.", e)
+            // Ignore
         }
     }
 });
 
-
 onBeforeUnmount(() => {
   if (sortableInstance) {
-    sortableInstance.destroy(); // Clean up SortableJS instance
+    sortableInstance.destroy();
   }
 });
-
 
 const cancelEdit = () => {
   editingTaskId.value = null;
@@ -277,50 +275,23 @@ const createDefaultEditableTask = () => {
 const focusFirstInput = async () => {
   await nextTick();
   if (firstEditableInput.value) {
-    firstEditableInput.value.focus();
-    if (typeof firstEditableInput.value.select === 'function') {
-      firstEditableInput.value.select();
+    const elementToFocus = Array.isArray(firstEditableInput.value) ? firstEditableInput.value[0] : firstEditableInput.value;
+    if (elementToFocus) {
+        elementToFocus.focus();
+        if (typeof elementToFocus.select === 'function') {
+            elementToFocus.select();
+        }
     }
   }
 };
 
-watch(() => projectsStore.currentProject, (newProject) => {
-  cancelEdit();
-  if (sortableInstance) { // Destroy sortable instance for old project
-      sortableInstance.destroy();
-      sortableInstance = null;
-  }
-  if (newProject) {
-    tasksStore.fetchTasksForProject(newProject.id).then(() => {
-        nextTick(() => { // Ensure DOM has updated with new tasks before initSortable
-            if (localTasks.value.length > 0 && tasksTbody.value) {
-                 initSortable();
-            }
-        });
-    });
-  } else {
-    tasksStore.tasksList = [];
-  }
-}, { immediate: true });
-
-watch(() => tasksStore.availableRoles, (newRoles) => {
-  if (editableTaskData.value) {
-    const currentEffortsSource = editableTaskData.value.efforts ? toRaw(editableTaskData.value.efforts) : {};
-    const newPlainEfforts = {};
-    (newRoles || []).forEach(role => {
-      newPlainEfforts[role] = Number(currentEffortsSource[role] || 0);
-    });
-    editableTaskData.value.efforts = newPlainEfforts;
-  }
-}, { deep: true });
-
 const prepareNewTask = () => {
-  if (editingTaskId.value) return;
-  editableTaskData.value = createDefaultEditableTask();
+  if (editingTaskId.value) return; 
   if (!projectsStore.currentProject?.id) {
     alert("Please select a project first.");
     return;
   }
+  editableTaskData.value = createDefaultEditableTask();
   editableTaskData.value.projectId = projectsStore.currentProject.id;
   editingTaskId.value = 'new';
   focusFirstInput();
@@ -341,10 +312,7 @@ const startEdit = (task, index) => {
 };
 
 const saveEditedTask = async () => {
-  // NEW CHECK: Only proceed if an edit was intended
   if (!editingTaskId.value || !editableTaskData.value) {
-    // console.log('[saveEditedTask] Called but no active edit. Bailing out.');
-    // This might happen if form submitted due to focus shift after delete/re-render
     return; 
   }
 
@@ -368,7 +336,7 @@ const saveEditedTask = async () => {
   if (editingTaskId.value === 'new') {
     taskToSave.id = null;
   }
-  const saved = await tasksStore.saveTask(taskToSave); // This will trigger fetch and re-init sortable via watcher
+  const saved = await tasksStore.saveTask(taskToSave);
   if (saved) {
     cancelEdit();
   } else {
@@ -380,52 +348,244 @@ const confirmDeleteTask = async (taskId) => {
   if (editingTaskId.value) return;
   if (confirm('Are you sure you want to delete this task?')) {
     await tasksStore.deleteTask(taskId, projectsStore.currentProject.id);
-    console.log('After delete, active element is:', document.activeElement);
   }
 };
 
-// calculateTaskTotalDays, calculateTaskTotalCost, formatCurrency remain the same
-const calculateTaskTotalDays = (task) => { /* ... same ... */ if (!task || !task.efforts) return 0; return Object.values(task.efforts).reduce((sum, effort) => sum + Number(effort || 0), 0); };
-const calculateTaskTotalCost = (task) => { /* ... same ... */ if (!task || !task.efforts || !ratesStore.ratesList || ratesStore.ratesList.length === 0) return 0; let cost = 0; const roleRatesMap = ratesStore.ratesList.reduce((acc, r) => { if (r && r.role) { acc[r.role] = r.unit === 'hour' ? (Number(r.rate || 0) * 8) : Number(r.rate || 0); } return acc; }, {}); for (const role in task.efforts) { if (roleRatesMap[role] !== undefined && task.efforts[role]) { cost += Number(task.efforts[role]) * roleRatesMap[role]; } } cost += Number(task.travelCost || 0); cost += Number(task.materialsCost || 0); return cost; };
-const formatCurrency = (value) => { /* ... same ... */ return new Intl.NumberFormat('en-US', { style: 'currency', currency: 'USD' }).format(value || 0); };
+watch(() => projectsStore.currentProject, (newProject) => {
+  cancelEdit();
+  if (sortableInstance) {
+      sortableInstance.destroy();
+      sortableInstance = null;
+  }
+  if (newProject) {
+    tasksStore.fetchTasksForProject(newProject.id).then(() => {
+        nextTick(() => {
+            if (localTasks.value.length > 0 && tasksTbody.value) {
+                 initSortable();
+            }
+        });
+    });
+  } else {
+    tasksStore.tasksList = [];
+  }
+}, { immediate: true });
 
+watch(() => tasksStore.availableRoles, (newRoles) => {
+  if (editableTaskData.value) {
+    const currentEffortsSource = editableTaskData.value.efforts ? toRaw(editableTaskData.value.efforts) : {};
+    const newPlainEfforts = {};
+    (newRoles || []).forEach(role => {
+      newPlainEfforts[role] = Number(currentEffortsSource[role] || 0);
+    });
+    editableTaskData.value.efforts = newPlainEfforts;
+  }
+}, { deep: true });
 
 defineExpose({ saveEditedTask, cancelEdit });
-
 </script>
 
 <style scoped>
-/* Styles from previous full CSS, adapted slightly */
-.add-task-controls { margin-bottom: 15px; display: flex; align-items: center; }
-.editing-hint { margin-left: 10px; font-size: 0.9em; color: #777; }
+.add-task-controls { 
+  margin-bottom: 15px; 
+  display: flex; 
+  align-items: center; 
+}
+
+.editing-hint { 
+  margin-left: 10px; 
+  font-size: 0.9em; 
+  color: #777; 
+}
+
+/* TABLE STYLING - Core table structure */
+.task-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
+}
+
+.task-table th, .task-table td {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
+
+.task-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #dee2e6;
+}
+
+.task-table tbody tr {
+  border-bottom: 1px solid #e9ecef;
+}
+
+.task-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.task-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+/* FOOTER STYLING */
+.task-table tfoot th {
+  background-color: #e9ecef;
+  border-top: 2px solid #adb5bd;
+  font-weight: bold;
+  color: #495057;
+}
+
+.task-table tfoot .cost-summary th {
+  background-color: #d1ecf1;
+  color: #0c5460;
+  font-size: 0.9em;
+}
+
+/* EDITABLE TABLE SPECIFIC STYLES */
 .task-table.editable-table td input[type="text"],
 .task-table.editable-table td input[type="number"] {
-  width: 100%; padding: 6px 8px; margin: 0px -8px; /* Counteract cell padding */
-  border: 1px solid #3498db; font-size: inherit; height: calc(100% + 12px); /* Fill cell */
+  width: 100%;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  border: 1px solid #3498db;
+  border-radius: 3px;
+  font-size: inherit;
   box-sizing: border-box;
+  background-color: white;
 }
-.task-table.editable-table td { vertical-align: middle; } /* Better for inputs */
-.editing-row { background-color: #e6f7ff !important; }
-.new-task-row td { padding-top: 10px; padding-bottom: 10px; } /* More space for new row inputs */
-.actions-cell { white-space: nowrap; text-align: right; }
-.actions-cell button.small-btn { padding: 5px 8px; font-size: 0.85em; margin-left: 4px; }
-.actions-cell button.small-btn i { margin-right: 4px; }
-.read-only-cell { color: #555; font-style: italic; }
-.description-cell { max-width: 250px; white-space: normal; font-size: 0.9em; color: #444; }
-.no-description { color: #aaa; font-style: italic; }
-.no-tasks-message { text-align: center; padding: 20px; color: #777; font-style: italic; }
-.col-drag-handle { width: 30px; }
-.col-name { width: 20%; }
-.col-description { width: 25%; }
-.col-effort { width: auto; min-width: 70px; text-align: center; }
-.col-cost { width: 10%; text-align: right; }
-.col-total { width: 10%; text-align: right; font-weight: bold; }
-.col-actions { width: auto; min-width: 120px; text-align: center;}
-.task-table tfoot .role-cost-cell { font-size: 0.85em; text-align: right; font-weight: normal; }
-.drag-handle-cell { width: 30px; text-align: center; padding-left: 8px; padding-right: 8px; }
-.drag-handle { cursor: grab; color: #aaa; }
-.drag-handle:hover { color: #777; }
-.disabled-drag-handle { cursor: default; color: #ddd; }
-.ghost-drag { opacity: 0.5; background: #c8ebfb; } /* SortableJS ghost class */
-.sortable-chosen { /* SortableJS class for the item being dragged */ }
+
+.editing-row {
+  background-color: #e6f7ff !important;
+}
+
+.editing-row td {
+  border-color: #3498db !important;
+}
+
+.new-task-row td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background-color: #f0f8ff;
+}
+
+/* COLUMN SPECIFIC STYLES */
+.col-drag-handle {
+  width: 30px;
+  text-align: center;
+  border-right: 2px solid #dee2e6;
+}
+
+.col-name {
+  min-width: 150px;
+  max-width: 200px;
+}
+
+.col-description {
+  min-width: 200px;
+  max-width: 300px;
+}
+
+.col-effort {
+  width: 80px;
+  text-align: center;
+}
+
+.col-cost {
+  width: 100px;
+  text-align: right;
+}
+
+.col-total {
+  width: 120px;
+  text-align: right;
+  font-weight: bold;
+  background-color: #f8f9fa;
+}
+
+.col-actions {
+  width: 140px;
+  text-align: center;
+  border-left: 2px solid #dee2e6;
+}
+
+/* CELL SPECIFIC STYLES */
+.read-only-cell {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.actions-cell {
+  white-space: nowrap;
+  text-align: center;
+}
+
+.actions-cell button.small-btn {
+  padding: 4px 8px;
+  font-size: 0.8em;
+  margin: 0 2px;
+}
+
+.description-cell {
+  max-width: 200px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.9em;
+  color: #495057;
+}
+
+.no-description {
+  color: #adb5bd;
+  font-style: italic;
+}
+
+.no-tasks-message {
+  text-align: center;
+  padding: 30px;
+  color: #6c757d;
+  font-style: italic;
+  background-color: #f8f9fa;
+}
+
+/* DRAG AND DROP STYLES */
+.drag-handle-cell {
+  width: 30px;
+  text-align: center;
+  padding-left: 8px;
+  padding-right: 8px;
+  background-color: #f8f9fa;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #adb5bd;
+  font-size: 0.9em;
+}
+
+.drag-handle:hover {
+  color: #6c757d;
+}
+
+.disabled-drag-handle {
+  cursor: default;
+  color: #dee2e6;
+}
+
+.ghost-drag {
+  opacity: 0.5;
+  background: #c8ebfb;
+}
+
+.task-table tfoot .role-cost-cell {
+  font-size: 0.85em;
+  text-align: right;
+  font-weight: normal;
+}
 </style>

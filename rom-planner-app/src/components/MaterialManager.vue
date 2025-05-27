@@ -298,26 +298,214 @@ watch(() => projectsStore.currentProject, (newProject) => {
 </script>
 
 <style scoped>
-.material-manager { /* Styles specific to MaterialManager or use global .component-section */ }
-.add-item-controls { margin-bottom: 15px; display: flex; align-items: center; }
-.editing-hint { margin-left: 10px; font-size: 0.9em; color: #777; }
+/* Add this CSS to both TaskManager.vue and MaterialManager.vue <style scoped> sections */
 
-.material-table th, .material-table td {
-  /* Adjust column widths as needed */
+/* TABLE STYLING - Core table structure */
+.task-table, .material-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 15px;
+  background-color: white;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  overflow: hidden;
 }
-.material-table .col-actions { width: 150px; text-align: center; }
-.comment-cell { max-width: 200px; white-space: pre-wrap; word-break: break-word; font-size:0.9em; }
-.read-only-cell { color: #555; font-style: italic; }
-.actions-cell button.small-btn { padding: 5px 8px; font-size: 0.85em; }
-.actions-cell button.small-btn i { margin-right: 3px; }
 
-.new-item-row td { padding-top: 10px; padding-bottom: 10px; }
+.task-table th, .task-table td,
+.material-table th, .material-table td {
+  border: 1px solid #ddd;
+  padding: 8px 12px;
+  text-align: left;
+  vertical-align: middle;
+}
 
-/* Ensure select takes up space like other inputs in editable table */
-.editable-table td select {
-  /* width: 100%; */
-  /* box-sizing: border-box; */
-  /* padding: 6px 8px; */
-  /* height: calc(100% + 12px); */
+.task-table th, .material-table th {
+  background-color: #f8f9fa;
+  font-weight: 600;
+  color: #495057;
+  border-bottom: 2px solid #dee2e6;
+  position: sticky;
+  top: 0;
+  z-index: 10;
+}
+
+.task-table tbody tr, .material-table tbody tr {
+  border-bottom: 1px solid #e9ecef;
+}
+
+.task-table tbody tr:hover, .material-table tbody tr:hover {
+  background-color: #f8f9fa;
+}
+
+.task-table tbody tr:last-child, .material-table tbody tr:last-child {
+  border-bottom: none;
+}
+
+/* FOOTER STYLING */
+.task-table tfoot th, .material-table tfoot th {
+  background-color: #e9ecef;
+  border-top: 2px solid #adb5bd;
+  font-weight: bold;
+  color: #495057;
+}
+
+.task-table tfoot .cost-summary th {
+  background-color: #d1ecf1;
+  color: #0c5460;
+  font-size: 0.9em;
+}
+
+/* EDITABLE TABLE SPECIFIC STYLES */
+.task-table.editable-table td input[type="text"],
+.task-table.editable-table td input[type="number"],
+.task-table.editable-table td select,
+.material-table.editable-table td input[type="text"],
+.material-table.editable-table td input[type="number"],
+.material-table.editable-table td select {
+  width: 100%;
+  padding: 6px 8px;
+  margin: -6px -8px;
+  border: 1px solid #3498db;
+  border-radius: 3px;
+  font-size: inherit;
+  box-sizing: border-box;
+  background-color: white;
+}
+
+.editing-row {
+  background-color: #e6f7ff !important;
+}
+
+.editing-row td {
+  border-color: #3498db !important;
+}
+
+.new-task-row td, .new-item-row td {
+  padding-top: 12px;
+  padding-bottom: 12px;
+  background-color: #f0f8ff;
+}
+
+/* COLUMN SPECIFIC STYLES */
+.col-drag-handle {
+  width: 30px;
+  text-align: center;
+  border-right: 2px solid #dee2e6;
+}
+
+.col-name {
+  min-width: 150px;
+  max-width: 200px;
+}
+
+.col-description {
+  min-width: 200px;
+  max-width: 300px;
+}
+
+.col-effort {
+  width: 80px;
+  text-align: center;
+}
+
+.col-cost {
+  width: 100px;
+  text-align: right;
+}
+
+.col-total {
+  width: 120px;
+  text-align: right;
+  font-weight: bold;
+  background-color: #f8f9fa;
+}
+
+.col-actions {
+  width: 140px;
+  text-align: center;
+  border-left: 2px solid #dee2e6;
+}
+
+/* CELL SPECIFIC STYLES */
+.read-only-cell {
+  background-color: #f8f9fa;
+  color: #6c757d;
+  font-style: italic;
+}
+
+.actions-cell {
+  white-space: nowrap;
+  text-align: center;
+}
+
+.actions-cell button.small-btn {
+  padding: 4px 8px;
+  font-size: 0.8em;
+  margin: 0 2px;
+}
+
+.description-cell, .comment-cell {
+  max-width: 200px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  font-size: 0.9em;
+  color: #495057;
+}
+
+.no-description {
+  color: #adb5bd;
+  font-style: italic;
+}
+
+.no-tasks-message {
+  text-align: center;
+  padding: 30px;
+  color: #6c757d;
+  font-style: italic;
+  background-color: #f8f9fa;
+}
+
+/* DRAG AND DROP STYLES */
+.drag-handle-cell {
+  width: 30px;
+  text-align: center;
+  padding-left: 8px;
+  padding-right: 8px;
+  background-color: #f8f9fa;
+}
+
+.drag-handle {
+  cursor: grab;
+  color: #adb5bd;
+  font-size: 0.9em;
+}
+
+.drag-handle:hover {
+  color: #6c757d;
+}
+
+.disabled-drag-handle {
+  cursor: default;
+  color: #dee2e6;
+}
+
+.ghost-drag {
+  opacity: 0.5;
+  background: #c8ebfb;
+}
+
+/* RESPONSIVE ADJUSTMENTS */
+@media (max-width: 1200px) {
+  .task-table, .material-table {
+    font-size: 0.9em;
+  }
+  
+  .col-description {
+    max-width: 200px;
+  }
+  
+  .col-effort {
+    width: 70px;
+  }
 }
 </style>

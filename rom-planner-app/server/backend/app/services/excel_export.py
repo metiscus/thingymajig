@@ -89,21 +89,28 @@ def generate_project_excel(
     summary_sheet.cell(row=summary_sheet.max_row, column=2).number_format = '$#,##0.00'
     summary_sheet.append([]) # Empty row
 
-    subtotal_row = summary_sheet.append(['SUBTOTAL (Before Risk):', subtotal_before_risk])
-    subtotal_row[0].font = Font(bold=True)
-    subtotal_row[1].font = Font(bold=True)
-    subtotal_row[1].number_format = '$#,##0.00'
+    # For SUBTOTAL (Before Risk)
+    summary_sheet.append(['SUBTOTAL (Before Risk):', subtotal_before_risk])
+    current_row_num = summary_sheet.max_row
+    subtotal_cell_label = summary_sheet.cell(row=current_row_num, column=1)
+    subtotal_cell_value = summary_sheet.cell(row=current_row_num, column=2)
+    subtotal_cell_label.font = Font(bold=True)
+    subtotal_cell_value.font = Font(bold=True)
+    subtotal_cell_value.number_format = '$#,##0.00'
     
-    risk_row = summary_sheet.append([f'Risk ({risk_percentage}%):', risk_amount])
-    risk_row[1].number_format = '$#,##0.00'
+    # For Risk
+    summary_sheet.append([f'Risk ({risk_percentage}%):', risk_amount])
+    summary_sheet.cell(row=summary_sheet.max_row, column=2).number_format = '$#,##0.00'
     summary_sheet.append([]) # Empty row
 
-    grand_total_row = summary_sheet.append(['PROJECT GRAND TOTAL (incl. Risk):', grand_total_with_risk])
-    for cell in grand_total_row:
-        cell.font = Font(bold=True, size=12)
-        cell.fill = PatternFill(start_color="FF35495E", end_color="FF35495E", fill_type="solid")
-        cell.font.color.rgb = 'FFFFFFFF'
-    grand_total_row[1].number_format = '$#,##0.00'
+    # For GRAND TOTAL
+    summary_sheet.append(['PROJECT GRAND TOTAL (incl. Risk):', grand_total_with_risk])
+    current_row_num = summary_sheet.max_row
+    for col_idx_grand_total in range(1, 3): # Columns A and B for grand total
+        cell = summary_sheet.cell(row=current_row_num, column=col_idx_grand_total)
+        cell.font = Font(bold=True, size=12, color='FFFFFFFF') # White text
+        cell.fill = PatternFill(start_color="35495E", end_color="35495E", fill_type="solid") # Dark blue fill
+    summary_sheet.cell(row=current_row_num, column=2).number_format = '$#,##0.00'
 
     for row_idx in range(1, summary_sheet.max_row + 1):
         for col_idx in range(1, summary_sheet.max_column + 1):
@@ -215,11 +222,13 @@ def generate_project_excel(
             item.lineItem, item.vendor, item.category, item.unitPrice, item.quantity, subtotal, item.comment
         ])
     
-    materials_sheet.append([]) # Empty row
-    total_mat_row = materials_sheet.append(['Total Detailed Material Costs:', '', '', '', '', total_detailed_material_expenses])
-    total_mat_row[0].font = Font(bold=True)
-    total_mat_row[5].font = Font(bold=True)
-    total_mat_row[5].number_format = '$#,##0.00'
+    materials_sheet.append(['Total Detailed Material Costs:', '', '', '', '', total_detailed_material_expenses])
+    current_row_num = materials_sheet.max_row
+    total_mat_label_cell = materials_sheet.cell(row=current_row_num, column=1)
+    total_mat_value_cell = materials_sheet.cell(row=current_row_num, column=6) # Column F
+    total_mat_label_cell.font = Font(bold=True)
+    total_mat_value_cell.font = Font(bold=True)
+    total_mat_value_cell.number_format = '$#,##0.00'
 
     # Save to BytesIO
     buffer = BytesIO()

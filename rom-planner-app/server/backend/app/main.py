@@ -1,9 +1,15 @@
 # backend/app/main.py
-from fastapi import FastAPI
+from fastapi import FastAPI, Depends, HTTPException, status
 from fastapi.middleware.cors import CORSMiddleware
-from sqlmodel import SQLModel
-from app.database import engine
+from sqlmodel import SQLModel, Session, select
+from sqlmodel.ext.asyncio.session import AsyncSession
+from app.database import sync_engine, get_session, get_async_session, async_engine
 from app.config import FRONTEND_CORS_ORIGINS
+
+# Import auth components
+from app.auth import fastapi_users, auth_backend, current_active_user, current_superuser
+from app.schemas import UserRead, UserCreate, UserUpdate
+from app.models import User
 
 # Import routers
 from app.routers import (
@@ -16,12 +22,7 @@ from app.routers import (
 )
 
 # Explicitly import models in dependency order
-# This ensures that 'Project' is fully registered with metadata before 'Task' or 'MaterialItem' are.
-from app.models import Rate # Independent
-from app.models import GlobalMaterial # Independent
-from app.models import Project # Parent
-from app.models import Task # Child of Project
-from app.models import MaterialItem # Child of Project
+from app.models import Rate, GlobalMaterial, Project, Task, MaterialItem
 
 app = FastAPI(
     title="ROM Planner API",
@@ -29,17 +30,35 @@ app = FastAPI(
     version="0.0.1",
 )
 
-# Configure CORS (Cross-Origin Resource Sharing)
-# This is crucial for your frontend (running on a different port/domain) to talk to this backend
+# CORS configuration - MUST be before route definitions
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=FRONTEND_CORS_ORIGINS, # List of allowed origins from config
+    allow_origins=["*"],  # Temporarily allow all origins for debugging
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods (GET, POST, PUT, DELETE, etc.)
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["*"],
+    allow_headers=["*"],
 )
 
-# Include all API routers
+# Authentication routes
+app.include_router(
+    fastapi_users.get_auth_router(auth_backend), 
+    prefix="/auth/jwt", 
+    tags=["auth"]
+)
+
+app.include_router(
+    fastapi_users.get_register_router(UserRead, UserCreate),
+    prefix="/auth",
+    tags=["auth"],
+)
+
+app.include_router(
+    fastapi_users.get_users_router(UserRead, UserUpdate),
+    prefix="/users",
+    tags=["users"],
+)
+
+# API routes
 app.include_router(projects.router)
 app.include_router(rates.router)
 app.include_router(tasks.router)
@@ -47,20 +66,20 @@ app.include_router(material_items.router)
 app.include_router(global_materials.router)
 app.include_router(export.router)
 
-
 @app.on_event("startup")
-def on_startup():
-    """
-    Event handler that runs when the FastAPI application starts up.
-    It creates all defined database tables if they don't already exist.
-    """
-    # In a production environment, you would typically use a dedicated database migration tool
-    # like Alembic for schema management rather than create_all() on every startup.
-    # create_all() is fine for initial development and testing.
-    SQLModel.metadata.create_all(engine)
-    print("Database tables checked/created.")
+async def on_startup():
+    SQLModel.metadata.create_all(sync_engine)
+    print("Database tables created/verified successfully")
 
 @app.get("/")
 def read_root():
-    """Root endpoint to check if the API is running."""
-    return {"message": "Welcome to ROM Planner API!"}
+    return {"message": "ROM Planner API is running"}
+
+@app.get("/health")
+def health_check():
+    return {"status": "healthy"}
+
+# Test protected route
+@app.get("/test-auth")
+async def test_auth(user: User = Depends(current_active_user)):
+    return {"message": f"Authenticated as {user.email}", "user_id": str(user.id)}

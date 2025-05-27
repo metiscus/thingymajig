@@ -1,10 +1,7 @@
 // src/services/httpAPI.js
 import axios from 'axios';
 
-// Get backend URL from environment variable
-// In development, Vite processes `import.meta.env.VITE_BACKEND_URL`
-// In production, you might bake this value in during build, or have your Electron app point to a specific URL
-const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000'; // Default to local backend
+const BASE_URL = import.meta.env.VITE_BACKEND_URL || 'http://localhost:8000';
 
 const api = axios.create({
   baseURL: BASE_URL,
@@ -13,16 +10,79 @@ const api = axios.create({
   },
 });
 
-// Optional: Add an interceptor for authentication tokens later if you implement auth
-// api.interceptors.request.use(config => {
-//   const token = localStorage.getItem('authToken'); // Example: get token from local storage
-//   if (token) {
-//     config.headers.Authorization = `Bearer ${token}`;
-//   }
-//   return config;
-// });
+// NEW: Axios interceptor to add JWT to every request
+api.interceptors.request.use(config => {
+  const token = localStorage.getItem('jwt_token');
+  if (token) {
+    // Make sure we're using the correct Bearer format
+    config.headers.Authorization = `Bearer ${token}`;
+    console.log('Request with token:', config.headers.Authorization.substring(0, 30) + '...');
+  }
+  return config;
+}, error => {
+  return Promise.reject(error);
+});
+
+// Response interceptor for 401 handling
+api.interceptors.response.use(response => response, error => {
+  if (error.response && error.response.status === 401) {
+    console.warn('Unauthorized request. Token might be expired or invalid.');
+    // Clear the invalid token
+    localStorage.removeItem('jwt_token');
+  }
+  return Promise.reject(error);
+});
+
 
 export const httpAPI = {
+  // --- AUTHENTICATION ---
+  login: async (email, password) => {
+    // fastapi-users /auth/jwt/login endpoint expects a POST with form data
+    const formData = new URLSearchParams();
+    formData.append('username', email); // fastapi-users uses 'username' for email by default
+    formData.append('password', password);
+    try {
+      const response = await api.post('/auth/jwt/login', formData, {
+        headers: { 'Content-Type': 'application/x-www-form-urlencoded' }
+      });
+
+      console.log('Login response:', response.data);
+
+      return response.data; // Should contain 'access_token' and 'token_type'
+    } catch (error) {
+      console.error('httpAPI: Login error:', error.response?.data || error.message);
+      throw error.response?.data || error;
+    }
+  },
+  register: async (email, password) => {
+    try {
+      const response = await api.post('/auth/register', { email, password });
+      return response.data; // Should contain new user data
+    } catch (error) {
+      console.error('httpAPI: Registration error:', error.response?.data || error.message);
+      throw error.response?.data || error;
+    }
+  },
+  logout: async () => {
+    // fastapi-users /auth/jwt/logout endpoint (typically a POST with no body)
+    try {
+      await api.post('/auth/jwt/logout');
+      return true;
+    } catch (error) {
+      console.error('httpAPI: Logout error:', error.response?.data || error.message);
+      throw error.response?.data || error;
+    }
+  },
+  getCurrentUser: async () => {
+    // fastapi-users /users/me endpoint
+    try {
+      const response = await api.get('/users/me');
+      return response.data; // Returns UserRead schema
+    } catch (error) {
+      console.error('httpAPI: Get current user error:', error.response?.data || error.message);
+      throw error.response?.data || error;
+    }
+  },
   // --- Projects ---
   getProjects: async () => {
     try {
@@ -120,10 +180,17 @@ export const httpAPI = {
   },
   updateTaskSequence: async (tasksToUpdate) => {
     try {
-      const response = await api.put('/tasks/sequence', tasksToUpdate);
-      return response.data; // Expects { success: true }
+      // Wrap the array in the expected format
+      const requestData = { tasks: tasksToUpdate };
+      console.log('Sending task sequence update:', requestData);
+      const response = await api.put('/tasks/sequence', requestData);
+      return response.data;
     } catch (error) {
       console.error('httpAPI: Error updating task sequence:', error);
+      // ADD THIS LINE TO LOG THE DETAILED ERROR FROM FASTAPI:
+      if (error.response && error.response.data) {
+        console.error('Error details from FastAPI:', JSON.stringify(error.response.data, null, 2));
+      }
       throw error;
     }
   },

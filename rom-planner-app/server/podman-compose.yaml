@@ -35,6 +35,8 @@ services:
       FRONTEND_CORS_ORIGINS: "http://localhost:5173"
       # Set to "true" for development to enable FastAPI's auto-reload
       # UVICORN_RELOAD: "true" # Uncomment and adjust CMD in Containerfile if you want hot-reloading
+      # For auth
+      AUTH_SECRET_KEY: ${AUTH_SECRET_KEY}
     # Map container port 8000 to host port 8000
     ports:
       - "8000:8000"

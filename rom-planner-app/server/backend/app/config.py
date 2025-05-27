@@ -15,3 +15,8 @@ if not DATABASE_URL:
 FRONTEND_CORS_ORIGINS = os.getenv("FRONTEND_CORS_ORIGINS", "http://localhost:5173").split(',')
 
 APP_NAME = "ROM Planner API"
+
+# Authentication secret key
+AUTH_SECRET_KEY = os.getenv("AUTH_SECRET_KEY")
+if not AUTH_SECRET_KEY:
+    raise ValueError("AUTH_SECRET_KEY environment variable not set. This is required for JWT.")

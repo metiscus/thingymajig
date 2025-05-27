@@ -2,6 +2,11 @@
 fastapi==0.111.0
 uvicorn[standard]==0.29.0
 sqlmodel==0.0.18
-psycopg2-binary==2.9.9 # PostgreSQL adapter
-openpyxl==3.1.2       # For Excel file generation
-python-dotenv==1.0.1  # For reading .env files locally (though Podman Compose handles it)
+psycopg2-binary==2.9.9
+openpyxl==3.1.2
+python-dotenv==1.0.1
+# Auth dependencies
+fastapi-users[jwt]==13.0.0
+fastapi-users-db-sqlmodel==0.3.0
+# Async database support
+asyncpg==0.29.0

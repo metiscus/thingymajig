@@ -30,15 +30,23 @@
         </button>
       </div>
     </form>
-     <div v-else-if="projectsStore.isLoading" class="loading-message">Loading project details...</div>
+    <div v-else-if="projectsStore.isLoading" class="loading-message">Loading project details...</div>
+  </div>
+
+  <!-- Show message when no project is loaded -->
+  <div v-else-if="$route.params.projectId && !projectsStore.isLoading" class="error-message component-section">
+    <p>Project not found or failed to load.</p>
+    <button @click="loadProjectFromRoute" class="secondary">Try Again</button>
   </div>
 </template>
 
 <script setup>
 import { ref, watch, onMounted } from 'vue';
+import { useRoute } from 'vue-router';
 import { useProjectsStore } from '../stores/projectsStore';
-import { toRaw } from 'vue'; // Import toRaw
+import { toRaw } from 'vue';
 
+const route = useRoute();
 const projectsStore = useProjectsStore();
 const editableProjectData = ref(null);
 
@@ -55,11 +63,51 @@ const syncFormWithStore = () => {
   }
 };
 
+const loadProjectFromRoute = async () => {
+  const projectId = route.params.projectId;
+  if (projectId && projectId !== 'new') {
+    console.log('Loading project from route:', projectId);
+    
+    // Check if projects array exists and load if needed
+    if (!projectsStore.projectsList || projectsStore.projectsList.length === 0) {
+      console.log('Loading projects from API...');
+      await projectsStore.fetchProjects();
+    }
+    
+    // Find and select the project
+    if (projectsStore.projectsList && projectsStore.projectsList.length > 0) {
+      const project = projectsStore.projectsList.find(p => p.id.toString() === projectId.toString());
+      if (project) {
+        console.log('Found project:', project.name);
+        projectsStore.selectProject(project);
+      } else {
+        console.error('Project not found:', projectId, 'Available projects:', projectsStore.projectsList.map(p => p.id));
+      }
+    } else {
+      console.error('No projects available after loading');
+    }
+  } else if (projectId === 'new') {
+    projectsStore.startNewProject();
+  }
+};
+
+// Watch for route changes
+watch(() => route.params.projectId, async (newProjectId) => {
+  console.log('Route changed to project:', newProjectId);
+  if (newProjectId) {
+    await loadProjectFromRoute();
+  }
+}, { immediate: true });
+
 // Watch for changes in the selected project or new project mode
 watch(() => [projectsStore.currentProject, projectsStore.isEditingNewProject], () => {
   syncFormWithStore();
 }, { deep: true, immediate: true });
 
+onMounted(async () => {
+  console.log('ProjectDetailsEditor mounted with route:', route.params);
+  await loadProjectFromRoute();
+});
 
 const handleSave = async () => {
   if (!editableProjectData.value || !editableProjectData.value.name.trim()) {
@@ -73,9 +121,6 @@ const handleSave = async () => {
   };
   
   await projectsStore.saveProject(dataToSave);
-  // The store's saveProject will now handle selecting the saved project,
-  // which will trigger the watcher and re-sync the form.
-  // projectsStore.isEditingNewProject will also be set to false by the store.
 };
 
 const handleCancel = () => {
@@ -86,7 +131,6 @@ const handleCancel = () => {
 const handleCancelNewProject = () => {
     projectsStore.cancelNewProjectEdit();
 };
-
 </script>
 
 <style scoped>
