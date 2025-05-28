@@ -273,7 +273,10 @@ const handleSaveItem = async () => {
 const confirmDeleteItem = async (itemId) => {
   if (editingItemId.value) return; 
   if (confirm('Are you sure you want to delete this material item?')) {
-    await materialItemsStore.deleteMaterialItem(itemId, projectsStore.currentProject.id);
+    const success = await materialItemsStore.deleteMaterialItem(itemId, projectsStore.currentProject.id);
+    if (!success) {
+      alert('Failed to delete material item. Check console for errors.');
+    }
   }
 };
 

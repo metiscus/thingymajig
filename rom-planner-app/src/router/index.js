@@ -7,6 +7,8 @@ import Login from '../views/Login.vue';
 import Register from '../views/Register.vue';
 import RatesManager from '../components/RatesManager.vue';
 import GlobalMaterialManager from '../components/GlobalMaterialManager.vue';
+import ProjectView from '../views/ProjectView.vue'; // NEW IMPORT
+import AdminDashboard from '../views/AdminDashboard.vue'; // NEW IMPORT
 
 const routes = [
   // Authentication routes (shown when not authenticated)
@@ -27,25 +29,28 @@ const routes = [
   {
     path: '/',
     name: 'Home',
-    component: () => import('../views/Home.vue'),
+    component: () => import('../views/Home.vue'), // Assuming Home.vue is a simple welcome page
     meta: { requiresAuth: true }
   },
   {
     path: '/project/new',
     name: 'NewProject',
     components: {
-      mainContent: () => import('../views/ProjectView.vue')
+      mainContent: ProjectView // Use ProjectView for new project creation
     },
-    meta: { requiresAuth: true }
+    meta: { requiresAuth: true },
+    props: {
+      mainContent: { isNewProject: true } // Pass a prop to indicate new project
+    }
   },
   {
     path: '/project/:projectId',
     name: 'ProjectDetails',
     components: {
-      mainContent: () => import('../views/ProjectView.vue')
+      mainContent: ProjectView // Use ProjectView for existing project details
     },
     props: {
-      mainContent: true
+      mainContent: true // Pass route params as props to ProjectView
     },
     meta: { requiresAuth: true }
   },
@@ -68,7 +73,9 @@ const routes = [
   {
     path: '/admin',
     name: 'AdminDashboard',
-    component: () => import('../views/AdminDashboard.vue'),
+    components: {
+      mainContent: AdminDashboard // Use AdminDashboard for admin panel
+    },
     meta: { requiresAuth: true, requiresAdmin: true }
   },
   

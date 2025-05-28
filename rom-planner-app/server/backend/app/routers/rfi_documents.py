@@ -4,7 +4,7 @@ import uuid
 from pathlib import Path
 from typing import List, Optional
 
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, Body # Import Body
 from fastapi.responses import FileResponse
 from sqlmodel import Session, select
 
@@ -12,6 +12,9 @@ from app.database import get_session
 from app.models import RFDocument, Project, User # RFDocumentBase implicit
 from app.auth import current_active_user
 from app.config import RFI_STORAGE_BASE_PATH
+
+from sqlmodel import SQLModel
+from datetime import datetime, timezone # Import timezone
 
 router = APIRouter(prefix="/rfi", tags=["RFI Documents"]) # Prefix adjusted for clarity
 
@@ -197,3 +200,37 @@ async def delete_rfi_document(
         # For now, we prioritize DB consistency.
 
     return None # FastAPI handles 204 No Content
+
+@router.post("/documents/{doc_id}/process", status_code=status.HTTP_200_OK)
+async def process_rfi_document_with_ai(
+    doc_id: int,
+    overwrite_tasks: dict = Body(..., embed=True), # Expects { "overwrite_tasks": true/false }
+    session: Session = Depends(get_session),
+    current_user: User = Depends(current_active_user),
+):
+    """
+    Simulates AI processing of an RFI document to generate tasks and requirements.
+    """
+    db_rfi_document = session.get(RFDocument, doc_id)
+    if not db_rfi_document:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="RFI Document not found.")
+
+    await get_project_if_authorized(db_rfi_document.project_id, current_user, session)
+
+    # Here would be the actual AI integration logic. For now, it's a placeholder.
+    # This might involve:
+    # 1. Reading content from `full_file_path`
+    # 2. Calling an LLM
+    # 3. Parsing LLM output into tasks and requirements
+    # 4. Saving new tasks/requirements to DB (possibly deleting existing ones based on `overwrite_tasks`)
+
+    # Update last_processed_at timestamp
+    db_rfi_document.last_processed_at = datetime.now(timezone.utc) # Use timezone.utc for consistency
+    session.add(db_rfi_document)
+    session.commit()
+    session.refresh(db_rfi_document)
+
+    # For now, just return a success message.
+    # In a real scenario, this would likely trigger a background task
+    # and provide a way for the frontend to poll for completion.
+    return {"message": f"Processing initiated for RFI document {db_rfi_document.filename}. Overwrite tasks: {overwrite_tasks.get('overwrite_tasks', False)}"}

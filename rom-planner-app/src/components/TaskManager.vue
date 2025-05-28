@@ -21,6 +21,7 @@
             <th class="col-drag-handle"></th> <!-- Handle for drag -->
             <th class="col-name">Task Name</th>
             <th class="col-description">Description</th>
+            <th class="col-requirements">Requirements</th> <!-- New column for requirements -->
             <th v-for="header_role in tasksStore.availableRoles" :key="header_role" class="col-effort">{{ header_role }} (Days)</th>
             <th class="col-cost">Travel</th>
             <th class="col-cost">Materials</th>
@@ -38,6 +39,13 @@
               <td class="drag-handle-cell"><i class="fas fa-grip-vertical drag-handle disabled-drag-handle"></i></td>
               <td><input type="text" v-model="editableTaskData.name" required ref="firstEditableInput" /></td>
               <td><input type="text" v-model="editableTaskData.description" /></td>
+              <td>
+                <select multiple v-model="editableTaskData.linkedRequirementIds">
+                  <option v-for="req in requirementsStore.requirementsList" :key="req.id" :value="req.id">
+                    {{ req.custom_id }}: {{ req.requirement_text.substring(0, 50) }}...
+                  </option>
+                </select>
+              </td>
               <td v-for="role_name_editor in tasksStore.availableRoles" :key="task.id + '-' + role_name_editor">
                 <input type="number" v-model.number="editableTaskData.efforts[role_name_editor]" min="0" step="0.5" />
               </td>
@@ -57,6 +65,14 @@
                 <span v-if="task.description">{{ task.description }}</span>
                 <span v-else class="no-description">-</span>
               </td>
+              <td @dblclick="startEdit(task, index)" class="requirements-cell">
+                <span v-if="task.requirements && task.requirements.length > 0" class="req-tags">
+                  <span v-for="req in task.requirements" :key="req.id" class="req-tag" :title="req.requirement_text">
+                    {{ req.custom_id }}
+                  </span>
+                </span>
+                <span v-else class="no-requirements">-</span>
+              </td>
               <td v-for="role_name_display in tasksStore.availableRoles" :key="task.id + '-' + role_name_display" @dblclick="startEdit(task, index)">
                 {{ task.efforts[role_name_display] || 0 }}
               </td>
@@ -74,7 +90,7 @@
         
         <tbody v-if="localTasks.length === 0 && editingTaskId !== 'new'">
             <tr>
-                <td :colspan="7 + tasksStore.availableRoles.length" class="no-tasks-message"> 
+                <td :colspan="8 + tasksStore.availableRoles.length" class="no-tasks-message"> 
                     No tasks in this project yet.
                 </td>
             </tr>
@@ -85,6 +101,13 @@
             <td class="drag-handle-cell"><i class="fas fa-grip-vertical disabled-drag-handle"></i></td>
             <td><input type="text" v-model="editableTaskData.name" placeholder="New Task Name" required ref="firstEditableInput"/></td>
             <td><input type="text" v-model="editableTaskData.description" placeholder="Description" /></td>
+            <td>
+              <select multiple v-model="editableTaskData.linkedRequirementIds">
+                <option v-for="req in requirementsStore.requirementsList" :key="req.id" :value="req.id">
+                  {{ req.custom_id }}: {{ req.requirement_text.substring(0, 50) }}...
+                </option>
+              </select>
+            </td>
             <td v-for="role_name_new in tasksStore.availableRoles" :key="'new-'+role_name_new">
               <input type="number" v-model.number="editableTaskData.efforts[role_name_new]" min="0" step="0.5" />
             </td>
@@ -102,7 +125,7 @@
         <tfoot v-if="localTasks.length > 0 || editingTaskId === 'new'">
           <tr>
             <th class="col-drag-handle"></th>
-            <th colspan="2">Project Totals:</th>
+            <th colspan="3">Project Totals:</th> <!-- Increased colspan for new column -->
             <th v-for="footer_total_role in tasksStore.availableRoles" :key="'total-' + footer_total_role">
               {{ tasksStore.totalDaysPerRoleForCurrentProject[footer_total_role] || 0 }}
             </th>
@@ -116,7 +139,7 @@
           </tr>
           <tr class="cost-summary">
               <th class="col-drag-handle"></th>
-              <th colspan="2">Cost per Role:</th>
+              <th colspan="3">Cost per Role:</th> <!-- Increased colspan -->
                <th v-for="footer_cost_role in tasksStore.availableRoles" :key="'cost-total-' + footer_cost_role" class="role-cost-cell">
                   {{ formatCurrency(tasksStore.totalCostPerRoleForCurrentProject[footer_cost_role] || 0) }}
                </th>
@@ -140,10 +163,12 @@ import Sortable from 'sortablejs';
 import { useProjectsStore } from '../stores/projectsStore';
 import { useTasksStore } from '../stores/tasksStore';
 import { useRatesStore } from '../stores/ratesStore';
+import { useRequirementsStore } from '../stores/requirementsStore'; // NEW IMPORT
 
 const projectsStore = useProjectsStore();
 const tasksStore = useTasksStore();
 const ratesStore = useRatesStore();
+const requirementsStore = useRequirementsStore(); // NEW: Initialize requirements store
 
 const editingTaskId = ref(null);
 const editableTaskData = ref(null);
@@ -151,8 +176,6 @@ const firstEditableInput = ref(null);
 const localTasks = ref([]);
 const tasksTbody = ref(null);
 let sortableInstance = null;
-
-// ... (keep all the existing script logic - just the template and styles needed updating)
 
 const calculateTaskTotalDays = (task) => { 
   if (!task || !task.efforts) return 0; 
@@ -183,7 +206,12 @@ const formatCurrency = (value) => {
 };
 
 watch(() => tasksStore.tasksList, (newTasksFromStore) => {
-  localTasks.value = Array.isArray(newTasksFromStore) ? [...newTasksFromStore] : [];
+  // Ensure that task objects have a 'requirements' array and a 'linkedRequirementIds' for the form
+  localTasks.value = Array.isArray(newTasksFromStore) ? newTasksFromStore.map(task => ({
+    ...task,
+    requirements: task.requirements || [], // Ensure requirements array exists
+    linkedRequirementIds: task.requirements ? task.requirements.map(req => req.id) : [] // For multi-select
+  })) : [];
   if (tasksTbody.value && localTasks.value.length > 0) {
     initSortable();
   }
@@ -269,6 +297,7 @@ const createDefaultEditableTask = () => {
     travelCost: 0,
     materialsCost: 0,
     sequence: localTasks.value.length,
+    linkedRequirementIds: [] // NEW: default for new tasks
   };
 };
 
@@ -305,6 +334,10 @@ const startEdit = (task, index) => {
     plainEfforts[role] = Number(plainTaskCopy.efforts?.[role] || 0);
   });
   plainTaskCopy.efforts = plainEfforts;
+  
+  // NEW: Ensure linkedRequirementIds is populated for editing
+  plainTaskCopy.linkedRequirementIds = task.requirements ? task.requirements.map(req => req.id) : [];
+
   editableTaskData.value = plainTaskCopy;
   editableTaskData.value.sequence = task.sequence !== undefined ? task.sequence : index; 
   editingTaskId.value = task.id;
@@ -333,10 +366,15 @@ const saveEditedTask = async () => {
   } else { taskToSave.efforts = {}; }
   taskToSave.travelCost = Number(taskToSave.travelCost || 0);
   taskToSave.materialsCost = Number(taskToSave.materialsCost || 0);
+  
+  // NEW: Grab the selected requirement IDs
+  const selectedRequirementIds = taskToSave.linkedRequirementIds || [];
+  delete taskToSave.linkedRequirementIds; // Don't send this as part of the task payload
+
   if (editingTaskId.value === 'new') {
     taskToSave.id = null;
   }
-  const saved = await tasksStore.saveTask(taskToSave);
+  const saved = await tasksStore.saveTask(taskToSave, selectedRequirementIds); // Pass selected IDs
   if (saved) {
     cancelEdit();
   } else {
@@ -365,8 +403,11 @@ watch(() => projectsStore.currentProject, (newProject) => {
             }
         });
     });
+    // NEW: Fetch requirements for the project
+    requirementsStore.fetchRequirements(newProject.id);
   } else {
     tasksStore.tasksList = [];
+    requirementsStore.requirementsList = []; // Clear requirements when no project is selected
   }
 }, { immediate: true });
 
@@ -450,7 +491,8 @@ defineExpose({ saveEditedTask, cancelEdit });
 
 /* EDITABLE TABLE SPECIFIC STYLES */
 .task-table.editable-table td input[type="text"],
-.task-table.editable-table td input[type="number"] {
+.task-table.editable-table td input[type="number"],
+.task-table.editable-table td select {
   width: 100%;
   padding: 6px 8px;
   margin: -6px -8px;
@@ -490,6 +532,11 @@ defineExpose({ saveEditedTask, cancelEdit });
 .col-description {
   min-width: 200px;
   max-width: 300px;
+}
+
+.col-requirements { /* NEW COLUMN STYLE */
+  width: 150px; /* Adjust as needed */
+  vertical-align: top;
 }
 
 .col-effort {
@@ -541,7 +588,33 @@ defineExpose({ saveEditedTask, cancelEdit });
   color: #495057;
 }
 
-.no-description {
+.requirements-cell {
+  max-width: 150px;
+  white-space: normal;
+  word-break: break-word;
+}
+
+.req-tags {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+}
+
+.req-tag {
+  background-color: #e0f2f7;
+  color: #0288d1;
+  padding: 3px 6px;
+  border-radius: 3px;
+  font-size: 0.75em;
+  font-weight: 500;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  cursor: help; /* Indicate tooltip */
+  border: 1px solid #b3e5fc;
+}
+
+.no-description, .no-requirements {
   color: #adb5bd;
   font-style: italic;
 }

@@ -1,6 +1,6 @@
 # backend/app/routers/tasks.py
 from fastapi import APIRouter, Depends, HTTPException, status
-from sqlmodel import Session, select, func, col # Added col
+from sqlmodel import Session, select, func, col, SQLModel
 from typing import List, Optional, Dict
 from pydantic import BaseModel
 
@@ -8,6 +8,7 @@ from app.database import get_session
 # Updated model imports: Task, TaskBase, Project, User, Requirement, TaskRequirementLink
 from app.models import Task, TaskBase, Project, User, Requirement, TaskRequirementLink 
 from app.auth import current_active_user
+from datetime import datetime, timezone # Import timezone
 
 router = APIRouter(prefix="/tasks", tags=["Tasks"])
 
@@ -40,6 +41,9 @@ class RequirementBasicRead(SQLModel): # Simplified for embedding
     id: int
     custom_id: Optional[str] = None
     requirement_text: str
+    createdAt: datetime # ADDED: to match Requirement model
+    updatedAt: datetime # ADDED: to match Requirement model
+
 
 class TaskReadWithRequirements(TaskBase): # Used for GET responses
     id: int
@@ -148,61 +152,53 @@ async def update_task(
 
 # --- NEW Endpoints for Task-Requirement Linking ---
 
-@router.post("/{task_id}/requirements/{requirement_id}", response_model=TaskReadWithRequirements)
-async def link_requirement_to_task(
+# This endpoint handles setting (creating/updating) all requirements for a task at once.
+class TaskRequirementIdsUpdate(SQLModel):
+    requirement_ids: List[int]
+
+@router.put("/{task_id}/requirements", response_model=TaskReadWithRequirements)
+async def set_task_requirements(
     task_id: int,
-    requirement_id: int,
+    req_ids_in: TaskRequirementIdsUpdate,
     session: Session = Depends(get_session),
     current_user: User = Depends(current_active_user),
 ):
-    """Links a requirement to a task."""
+    """
+    Sets the requirements linked to a task.
+    Existing links not in the list are removed, new ones are added.
+    """
     db_task = await get_task_if_authorized(task_id, current_user, session)
     
-    db_requirement = session.get(Requirement, requirement_id)
-    if not db_requirement:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found.")
-    
-    if db_requirement.project_id != db_task.projectId:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Task and Requirement do not belong to the same project.")
+    # Fetch all requirements that should be linked
+    new_requirements = session.exec(
+        select(Requirement).where(col(Requirement.id).in_(req_ids_in.requirement_ids))
+    ).all()
 
-    # Check if link already exists
-    if db_requirement not in db_task.requirements:
-        db_task.requirements.append(db_requirement)
-        session.add(db_task) # Adding db_task should handle the M2M link via SQLModel's magic
-        session.commit()
-        session.refresh(db_task) # Refresh to ensure the requirements list is up-to-date
-    
+    # Filter out requirements not belonging to the same project
+    valid_new_requirements = [
+        req for req in new_requirements if req.project_id == db_task.projectId
+    ]
+    if len(valid_new_requirements) != len(req_ids_in.requirement_ids):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail="Some requirements specified are not valid or do not belong to this project."
+        )
+
+    db_task.requirements = valid_new_requirements # SQLModel handles the diffing and updates association table
+
+    session.add(db_task)
+    session.commit()
+    session.refresh(db_task)
     return db_task
 
 
-@router.delete("/{task_id}/requirements/{requirement_id}", response_model=TaskReadWithRequirements)
-async def unlink_requirement_from_task(
-    task_id: int,
-    requirement_id: int,
-    session: Session = Depends(get_session),
-    current_user: User = Depends(current_active_user),
-):
-    """Unlinks a requirement from a task."""
-    db_task = await get_task_if_authorized(task_id, current_user, session)
-    
-    db_requirement = session.get(Requirement, requirement_id)
-    if not db_requirement:
-        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Requirement not found.")
+# NOTE: The individual link/unlink endpoints are now redundant if `set_task_requirements` is used.
+# If you want to keep them for granular control or different use cases, they should be defined as:
+# @router.post("/{task_id}/requirements/{requirement_id}", ...)
+# @router.delete("/{task_id}/requirements/{requirement_id}", ...)
+# Ensure that frontend uses the correct `set_task_requirements` if these are removed.
 
-    if db_requirement in db_task.requirements:
-        db_task.requirements.remove(db_requirement)
-        session.add(db_task)
-        session.commit()
-        session.refresh(db_task)
-    else:
-        # If not found, it might be okay, or raise 404 for "link not found"
-        pass # Idempotent delete, link doesn't exist, so it's "deleted"
-        
-    return db_task
 
-# Existing delete_task and update_task_sequence endpoints... (no change needed for them in Phase 1 linking)
-# Make sure they are still at the end of the file or defined before being used.
-# ... (pasting existing delete_task and update_task_sequence)
 @router.put("/sequence", response_model=Dict[str, bool])
 async def update_task_sequence(
     request_data: TaskSequenceUpdateRequest,
@@ -246,9 +242,15 @@ async def delete_task(
     task_id: int,
     current_user: User = Depends(current_active_user)
 ):
+    """Deletes a task. This will also delete its associations in `TaskRequirementLink`."""
     task = await get_task_if_authorized(task_id, current_user, session) # Use helper
-    # Task.requirements list will be automatically handled by SQLAlchemy's M2M when task is deleted.
-    # The entries in TaskRequirementLink for this task_id will be removed.
+    
+    # SQLAlchemy's relationship `back_populates` with `link_model` ensures that
+    # when `db_task` is deleted, entries in `TaskRequirementLink` table related to this task
+    # are automatically cleaned up if foreign key constraints have ON DELETE CASCADE.
+    # SQLModel itself does not define ON DELETE CASCADE by default on join table FKs.
+    # It's good practice to ensure DB schema has ON DELETE CASCADE for association tables,
+    # or handle explicit deletion of links if needed.
     session.delete(task)
     session.commit()
     return {"ok": True} # Or None for 204

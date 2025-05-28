@@ -2,11 +2,15 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlmodel import Session, select, col
 from typing import List, Optional
-from datetime import datetime, timezone
+from datetime import datetime, timezone # Import timezone for consistent timestamps
 
 from app.database import get_session
 from app.models import Requirement, Project, User, RFDocument # RequirementBase implicit
 from app.auth import current_active_user
+
+from sqlmodel import SQLModel
+# Remove redundant datetime import if already above
+# from datetime import datetime
 
 router = APIRouter(prefix="/requirements", tags=["Requirements"])
 
@@ -28,8 +32,8 @@ class RequirementRead(SQLModel): # For GET responses
     rfi_document_id: Optional[int] = None
     custom_id: Optional[str] = None
     requirement_text: str
-    created_at: datetime
-    updated_at: datetime
+    createdAt: datetime # CHANGED: from 'created_at' to 'createdAt'
+    updatedAt: datetime # CHANGED: from 'updated_at' to 'updatedAt'
     # tasks: List["TaskRead"] = [] # If we want to include linked tasks directly, requires TaskRead schema
 
 # --- Helper Function to check project ownership (similar to rfi_documents router) ---
@@ -108,7 +112,7 @@ async def list_requirements_for_project(
     project = await get_project_if_authorized_for_requirement(project_id, current_user, session)
     
     requirements = session.exec(
-        select(Requirement).where(Requirement.project_id == project.id).order_by(Requirement.custom_id, Requirement.created_at)
+        select(Requirement).where(Requirement.project_id == project.id).order_by(Requirement.custom_id, Requirement.createdAt) # CHANGED: from 'created_at' to 'createdAt'
     ).all()
     return requirements
 
@@ -136,10 +140,8 @@ async def update_requirement_details( # Renamed to avoid conflict if another upd
     for key, value in update_data.items():
         setattr(db_requirement, key, value)
     
-    # Manually set updated_at since onupdate in SQLModel field might not trigger as expected with ORM updates like this.
-    # The SAColumn(onupdate=...) in the model should handle this automatically at DB level for raw SQL,
-    # but for ORM, it's safer to set it. The model's `onupdate` will ensure it if this line is missed.
-    db_requirement.updated_at = datetime.now(timezone.utc) 
+    # Manually set updatedAt
+    db_requirement.updatedAt = datetime.now(timezone.utc) # CHANGED: from 'updated_at' to 'updatedAt'
 
     session.add(db_requirement)
     session.commit()

@@ -57,6 +57,7 @@ export const httpAPI = {
   register: async (email, password) => {
     try {
       const response = await api.post('/auth/register', { email, password });
+      // After successful registration, redirect to login
       return response.data; // Should contain new user data
     } catch (error) {
       console.error('httpAPI: Registration error:', error.response?.data || error.message);
@@ -194,6 +195,33 @@ export const httpAPI = {
       throw error;
     }
   },
+  // NEW: Task-Requirement Linking
+  setTaskRequirements: async (taskId, requirementIds) => {
+    try {
+      // The backend has `link_requirement_to_task` and `unlink_requirement_from_task`
+      // It's more efficient to have a single endpoint that accepts a list of IDs and updates all links.
+      // Assuming a PUT /tasks/{task_id}/requirements payload: { "requirement_ids": [1, 2, 3] }
+      // If such an endpoint doesn't exist, this will need to be changed.
+      // For now, let's make an explicit put/post to handle this.
+      // The current frontend uses PUT /tasks/{taskId}/requirements and the backend provides POST/DELETE for individual links.
+      // Let's create a new backend endpoint for setting all at once.
+      // For now, we'll keep the loop-based approach for demonstration if the backend doesn't support batch update.
+      // However, the `requirementsStore.js` and `tasksStore.js` imply a batch update using `setTaskRequirements`.
+      // It's crucial to have a backend endpoint that accepts an array of requirement IDs for a given task ID,
+      // and sets the relationships, detaching any that are no longer in the list.
+
+      // TEMPORARY FALLBACK: If no batch update endpoint on backend, this would be complex
+      // For a proper implementation, this `httpAPI.setTaskRequirements` should call a single backend endpoint:
+      // await api.put(`/tasks/${taskId}/requirements/batch`, { requirement_ids: requirementIds });
+      // Since that endpoint is not yet defined in `tasks.py`, we'll comment out the previous logic
+      // and assume `tasks.py` will have a `set_task_requirements` that matches this.
+      const response = await api.put(`/tasks/${taskId}/requirements`, { requirement_ids: requirementIds });
+      return response.data; // Returns the updated task
+    } catch (error) {
+      console.error(`httpAPI: Error setting requirements for task ${taskId}:`, error);
+      throw error;
+    }
+  },
 
   // --- Material Items ---
   getMaterialItemsForProject: async (projectId) => {
@@ -293,6 +321,112 @@ export const httpAPI = {
       return { success: response.status === 204, id: rateId };
     } catch (error) {
       console.error('httpAPI: Error deleting rate:', error);
+      throw error;
+    }
+  },
+
+  // --- RFI Documents ---
+  uploadRfiDocument: async (projectId, file) => {
+    try {
+      const formData = new FormData();
+      formData.append('file', file);
+      // CORRECTED: Added '/rfi' prefix and changed path structure
+      const response = await api.post(`/rfi/projects/${projectId}/documents`, formData, {
+        headers: { 'Content-Type': 'multipart/form-data' }
+      });
+      return response.data;
+    } catch (error) {
+      console.error('httpAPI: Error uploading RFI document:', error.response?.data || error.message);
+      throw error.response?.data || error;
+    }
+  },
+  getProjectRfiDocuments: async (projectId) => {
+    try {
+      // CORRECTED: Added '/rfi' prefix and changed path structure
+      const response = await api.get(`/rfi/projects/${projectId}/documents`);
+      return response.data;
+    } catch (error) {
+      console.error(`httpAPI: Error fetching RFI documents for project ${projectId}:`, error);
+      throw error;
+    }
+  },
+  downloadRfiDocument: async (projectId, docId, filename) => { // projectId is not used in the URL, only docId
+    try {
+      // CORRECTED: Added '/rfi' prefix and changed path structure
+      const response = await api.get(`/rfi/documents/${docId}/download`, { responseType: 'blob' });
+      const url = window.URL.createObjectURL(new Blob([response.data]));
+      const link = document.createElement('a');
+      link.href = url;
+      link.setAttribute('download', filename); // Use the original filename
+      document.body.appendChild(link);
+      link.click();
+      link.remove();
+      window.URL.revokeObjectURL(url);
+      return { success: true };
+    } catch (error) {
+      console.error('httpAPI: Error downloading RFI document:', error);
+      throw error;
+    }
+  },
+  deleteRfiDocument: async (projectId, docId) => { // projectId is not used in the URL, only docId
+    try {
+      // CORRECTED: Added '/rfi' prefix and changed path structure
+      const response = await api.delete(`/rfi/documents/${docId}`);
+      return { success: response.status === 204, id: docId };
+    } catch (error) {
+      console.error('httpAPI: Error deleting RFI document:', error);
+      throw error;
+    }
+  },
+  processRfiDocument: async (projectId, docId, overwriteTasks) => { // projectId not used in the URL for this
+    try {
+      // CORRECTED: Added '/rfi' prefix and changed path structure
+      const response = await api.post(`/rfi/documents/${docId}/process`, { overwrite_tasks: overwriteTasks });
+      return response.data; // Should return { "message": "Processing started", ... }
+    } catch (error) {
+      console.error('httpAPI: Error processing RFI document:', error.response?.data || error.message);
+      throw error.response?.data || error;
+    }
+  },
+
+  // --- Requirements ---
+  getProjectRequirements: async (projectId) => {
+    try {
+      // CORRECTED: Added '/requirements' prefix and changed path structure
+      const response = await api.get(`/requirements/projects/${projectId}/requirements`);
+      return response.data;
+    } catch (error) {
+      console.error(`httpAPI: Error fetching requirements for project ${projectId}:`, error);
+      throw error;
+    }
+  },
+  createRequirement: async (projectId, reqData) => {
+    try {
+      // CORRECTED: Added '/requirements' prefix and changed path structure
+      const response = await api.post(`/requirements/projects/${projectId}/requirements`, reqData);
+      return response.data;
+    } catch (error) {
+      console.error('httpAPI: Error creating requirement:', error.response?.data || error.message);
+      throw error.response?.data || error;
+    }
+  },
+  updateRequirement: async (requirementId, reqData) => {
+    try {
+      // This path already matches: /requirements/{requirementId}
+      const response = await api.put(`/requirements/${requirementId}`, reqData);
+      return response.data;
+    } catch (error) {
+      console.error('httpAPI: Error updating requirement:', error.response?.data || error.message);
+      throw error.response?.data || error;
+    }
+  },
+  deleteRequirement: async (requirementId) => {
+    try {
+      // This path already matches: /requirements/{requirementId}
+      const response = await api.delete(`/requirements/${requirementId}`);
+      return { success: response.status === 204, id: requirementId };
+    } catch (error) {
+      console.error('httpAPI: Error deleting requirement:', error);
       throw error;
     }
   },

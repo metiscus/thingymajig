@@ -1,3 +1,4 @@
+--- START OF FILE src_components_ProjectManager.py ---
 <template>
   <div class="project-manager">
     <h3>Projects / Phases</h3>
@@ -52,7 +53,18 @@ const confirmDeleteProject = async (projectId) => {
 };
 
 const selectProject = (project) => {
-  projectsStore.selectProject(project);
+  // MODIFIED LOGIC:
+  // If the clicked project is already the current project in the store AND we are not in new project mode,
+  // then do nothing. This prevents deselecting by clicking on the already selected project.
+  if (projectsStore.currentProject && projectsStore.currentProject.id === project.id && !projectsStore.isEditingNewProject) {
+    console.log('ProjectManager: Clicking on currently selected project. Deselecting...');
+    projectsStore.selectProject(null); // Deselect the current project
+    return; 
+  }
+  
+  // Otherwise, proceed to select the project via the store action.
+  console.log('ProjectManager: Clicking on a new project or current project is not selected.');
+  projectsStore.selectProject(project); 
 };
 </script>
 

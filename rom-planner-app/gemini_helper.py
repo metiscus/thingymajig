@@ -23,11 +23,11 @@ source_paths = [
     "./package.json",
     "./preload.js", # Example based on your previous list
     "./vite.config.js",
-    "server",
-    "server/backend",
-    "server/backend/app",
-    "server/backend/app/routers",
-    "server/backend/app/services",
+#    "server",
+#    "server/backend",
+#    "server/backend/app",
+#    "server/backend/app/routers",
+#    "server/backend/app/services",
 ]
 # --- End Configuration ---
 
@@ -60,8 +60,14 @@ def copy_file_to_temp(original_file_abs_path, temp_dir_path, path_for_naming):
     'path_for_naming' is the string used to generate the new filename (e.g., "src/components/file.vue").
     Returns True if successful, False otherwise.
     """
+
     sanitized_base_name = sanitize_path_to_filename(path_for_naming)
-    new_txt_filename = f"{sanitized_base_name}.txt"
+    if ".py" not in original_file_abs_path:
+        new_txt_filename = f"{sanitized_base_name}.txt"
+    if ".svg" in original_file_abs_path:
+        return
+    else:
+        new_txt_filename = f"{sanitized_base_name}.py"
     new_file_path_abs = os.path.join(temp_dir_path, new_txt_filename)
 
     try:
@@ -90,6 +96,10 @@ def process_configured_paths(paths_to_process_list):
 
             if "__pycache__" in str(abs_item_path):
                 print(f"Warning: Skipping pycache directories.")
+                continue
+
+            if ".svg" in str(abs_item_path):
+                print(f"Warning: Skipping image files.")
                 continue
 
             if os.path.isdir(abs_item_path):

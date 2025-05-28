@@ -79,7 +79,8 @@ class Requirement(RequirementBase, TimeStampedModel, table=True):
     __tablename__ = "requirements"
     id: Optional[int] = Field(default=None, primary_key=True)
     # Use SAColumn for onupdate, default_factory for creation
-    updated_at: datetime = Field(
+    # Renamed to updatedAt for consistency with createdAt
+    updatedAt: datetime = Field( # CHANGED: Renamed from 'updated_at' to 'updatedAt'
         default_factory=lambda: datetime.now(timezone.utc),
         sa_column=SAColumn(DateTime(timezone=True), onupdate=lambda: datetime.now(timezone.utc), nullable=False)
     )

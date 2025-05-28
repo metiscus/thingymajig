@@ -49,7 +49,7 @@
           <router-view name="mainContent"></router-view>
 
           <!-- Welcome message if no project selected AND not in settings view -->
-          <div v-if="$route.name === 'Home' && !projectsStore.currentProject && !projectsStore.isEditingNewProject" class="welcome-message component-section">
+          <div v-if="showWelcomeMessage" class="welcome-message component-section">
             <h2>Welcome!</h2>
             <p>Select a project from the left sidebar to begin, or create a new one.</p>
             <p>Use the "Settings" section to define your labor rates and global material prices.</p>
@@ -61,25 +61,28 @@
 </template>
 
 <script setup>
-import { watch } from 'vue';
-import { useRouter, useRoute } from 'vue-router'; // Import router and route
+import { watch, computed } from 'vue';
+import { useRouter, useRoute } from 'vue-router';
 import ProjectManager from './components/ProjectManager.vue';
-import ProjectDetailsEditor from './components/ProjectDetailsEditor.vue';
-import ProjectSummary from './components/ProjectSummary.vue';
-import TaskManager from './components/TaskManager.vue';
-import MaterialManager from './components/MaterialManager.vue';
-import RatesManager from './components/RatesManager.vue';
-import GlobalMaterialManager from './components/GlobalMaterialManager.vue';
-// NO LONGER NEEDED: import Login and Register here as they are handled by router-view at root
 import { useProjectsStore } from './stores/projectsStore';
-import { useAuthStore } from './stores/authStore'; // NEW IMPORT
+import { useAuthStore } from './stores/authStore';
 
 const projectsStore = useProjectsStore();
-const authStore = useAuthStore(); // Initialize auth store
+const authStore = useAuthStore();
 
 const router = useRouter();
-const route = useRoute(); // Access current route
+const route = useRoute();
 
+// Computed property to determine if the welcome message should be shown
+const showWelcomeMessage = computed(() => {
+  const isWelcome = (
+    route.name === 'Home' && // Only show if current route is 'Home'
+    !projectsStore.currentProject && // And no project is selected
+    !projectsStore.isEditingNewProject // And not in new project mode
+  );
+  console.log('App.vue: showWelcomeMessage computed. Result:', isWelcome, 'route.name:', route.name, 'currentProject:', projectsStore.currentProject?.name, 'isEditingNewProject:', projectsStore.isEditingNewProject);
+  return isWelcome;
+});
 
 // Function to navigate to settings views
 const goToSettings = (setting) => {
@@ -89,34 +92,43 @@ const goToSettings = (setting) => {
   } else if (setting === 'materials') {
     router.push({ name: 'ManageGlobalMaterials' });
   } else if (setting === 'admin') {
-    router.push({ name: 'AdminDashboard' }); // Assuming you'll create this route
+    router.push({ name: 'AdminDashboard' });
   }
 };
 
-// Watch for currentProject changes to navigate to default project view
-// This replaces the old activeView logic for projects
+// MODIFIED: This watcher in App.vue becomes simpler.
+// It mainly handles cases where the route state changes unexpectedly
+// or when we need to ensure the project is selected based on a direct URL paste.
+// It *should not* re-push to ProjectDetails if projectsStore actions already did.
 watch(() => projectsStore.currentProject, (newProject) => {
-  if (newProject && newProject.id && route.name !== 'ProjectDetails') {
+  console.log('App.vue: projectsStore.currentProject watcher fired. newProject:', newProject?.name, 'isEditingNewProject:', projectsStore.isEditingNewProject, 'current route:', route.name);
+  
+  // If a project is selected in the store, but the route doesn't match, push to the correct route.
+  // This handles direct URL access or state synchronization.
+  if (newProject && newProject.id && (route.name !== 'ProjectDetails' || route.params.projectId != newProject.id)) {
+    console.log(`App.vue: Current project ${newProject.name} is selected, but route is ${route.name}. Navigating to ProjectDetails.`);
     router.push({ name: 'ProjectDetails', params: { projectId: newProject.id } });
-  } else if (projectsStore.isEditingNewProject && route.name !== 'NewProject') {
-    router.push({ name: 'NewProject' });
-  } else if (!newProject && !projectsStore.isEditingNewProject && route.name !== 'Home' && route.name !== 'ManageRates' && route.name !== 'ManageGlobalMaterials' && route.name !== 'AdminDashboard') {
-    // If no project selected and not in a settings view, go to Home (welcome)
+  } 
+  // If no project is selected in the store, and we are not in new project mode,
+  // and we are not on a settings page or already home, then go home.
+  else if (!newProject && !projectsStore.isEditingNewProject && !['ManageRates', 'ManageGlobalMaterials', 'AdminDashboard', 'Home'].includes(route.name)) {
+    console.log('App.vue: No project selected, not in new project mode, not a settings view. Redirecting to Home.');
     router.push({ name: 'Home' });
   }
 }, { immediate: true });
 
-// Watch for isEditingNewProject to ensure correct route for new project form
+// MODIFIED: This watcher is also simplified.
+// It only pushes to 'NewProject' if we are in new project mode AND not already on that route.
+// It explicitly *does not* handle the 'leaving new project mode' scenario, as that's handled by `cancelNewProjectEdit` itself.
 watch(() => projectsStore.isEditingNewProject, (isEditing) => {
+  console.log('App.vue: projectsStore.isEditingNewProject watcher fired. isEditing:', isEditing, 'current route:', route.name);
   if (isEditing && route.name !== 'NewProject') {
+    console.log('App.vue: In new project mode, but route is not NewProject. Navigating to NewProject.');
     router.push({ name: 'NewProject' });
-  } else if (!isEditing && route.name === 'NewProject') {
-    // If we're leaving new project mode, but no project is selected, go back home
-    if (!projectsStore.currentProject) {
-        router.push({ name: 'Home' });
-    }
   }
-});
+  // The 'else if (!isEditing && route.name === "NewProject")' logic is removed,
+  // as `cancelNewProjectEdit` directly pushes to 'Home'.
+}, { immediate: true });
 </script>
 
 <style>

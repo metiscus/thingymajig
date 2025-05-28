@@ -1,6 +1,5 @@
 <template>
-  <div class="project-details-editor component-section" v-if="projectsStore.currentProject || projectsStore.isEditingNewProject">
-    <h3>{{ projectsStore.isEditingNewProject ? 'Add New Project' : 'Edit Project Details' }}</h3>
+  <div class="project-details-editor component-section" v-if="projectsStore.currentProject || projectsStore.isEditingNewProject || (route.params.projectId && route.params.projectId !== 'new' && projectsStore.isLoading)">    <h3>{{ projectsStore.isEditingNewProject ? 'Add New Project' : 'Edit Project Details' }}</h3>
     
     <form @submit.prevent="handleSave" v-if="editableProjectData">
       <div class="form-grid">
@@ -58,42 +57,22 @@ const syncFormWithStore = () => {
     if (editableProjectData.value) {
         editableProjectData.value.riskPercentage = Number(editableProjectData.value.riskPercentage || 0);
     }
+  } else if (projectsStore.isEditingNewProject) {
+    // Initialize with default values for a new project
+    editableProjectData.value = {
+      name: '',
+      riskPercentage: 0, // Default risk
+      description: ''
+    };
   } else {
     editableProjectData.value = null; // Clear form if no project selected
   }
-};
-
-const loadProjectFromRoute = async () => {
-  const projectId = route.params.projectId;
-  if (projectId && projectId !== 'new') {
-    console.log('Loading project from route:', projectId);
-    
-    // Check if projects array exists and load if needed
-    if (!projectsStore.projectsList || projectsStore.projectsList.length === 0) {
-      console.log('Loading projects from API...');
-      await projectsStore.fetchProjects();
-    }
-    
-    // Find and select the project
-    if (projectsStore.projectsList && projectsStore.projectsList.length > 0) {
-      const project = projectsStore.projectsList.find(p => p.id.toString() === projectId.toString());
-      if (project) {
-        console.log('Found project:', project.name);
-        projectsStore.selectProject(project);
-      } else {
-        console.error('Project not found:', projectId, 'Available projects:', projectsStore.projectsList.map(p => p.id));
-      }
-    } else {
-      console.error('No projects available after loading');
-    }
-  } else if (projectId === 'new') {
-    projectsStore.startNewProject();
-  }
+  console.log('ProjectDetailsEditor: syncFormWithStore called. editableProjectData:', toRaw(editableProjectData.value));
 };
 
 // Watch for route changes
 watch(() => route.params.projectId, async (newProjectId) => {
-  console.log('Route changed to project:', newProjectId);
+  console.log('ProjectDetailsEditor: Route changed to project:', newProjectId);
   if (newProjectId) {
     await loadProjectFromRoute();
   }
@@ -101,12 +80,14 @@ watch(() => route.params.projectId, async (newProjectId) => {
 
 // Watch for changes in the selected project or new project mode
 watch(() => [projectsStore.currentProject, projectsStore.isEditingNewProject], () => {
+  console.log('ProjectDetailsEditor: projectsStore.currentProject or isEditingNewProject changed.');
   syncFormWithStore();
 }, { deep: true, immediate: true });
 
 onMounted(async () => {
-  console.log('ProjectDetailsEditor mounted with route:', route.params);
-  await loadProjectFromRoute();
+  console.log('ProjectDetailsEditor: mounted with route:', route.params);
+  // The immediate watcher on route.params.projectId should handle initial load.
+  // No explicit call to loadProjectFromRoute here, as it's handled by the watcher.
 });
 
 const handleSave = async () => {
